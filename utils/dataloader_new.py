@@ -14,6 +14,140 @@ from torch.nn.utils.rnn import pad_sequence
 
 import trackintel as ti
 
+import h5py
+
+# class sp_loc_dataset(torch.utils.data.Dataset):
+#     def __init__(
+#         self,
+#         source_root,
+#         dataset="gc",
+#         data_type="train",
+#         previous_day=7,
+#         model_type="transformer",
+#     ):
+#         self.root = source_root
+#         self.data_type = data_type
+#         self.previous_day = previous_day
+#         self.model_type = model_type
+#         self.dataset = dataset
+
+#         self.data_dir = os.path.join(source_root, "temp")
+#         save_path = os.path.join(
+#             self.data_dir,
+#             f"{self.dataset}_{self.model_type}_{self.previous_day}_preprocessed.h5",
+#         )
+
+#         print(f"Loading data from {save_path}.")
+#         if Path(save_path).is_file():
+#             with h5py.File(save_path, "r") as hdf:
+#                 self.data = {key: hdf[f"{self.data_type}/{key}"][:] for key in hdf[f"{self.data_type}"].keys()}
+#         else:
+#             print("Please generate preprocessed data using script (preprocess_h5_data.py).")
+#             exit()
+
+#         self.len = self.data["X"].shape[0]  # Update to reflect the length of the loaded subset
+
+#     def __len__(self):
+#         """Return the length of the current dataloader."""
+#         return self.len
+
+#     def __getitem__(self, idx):
+#         selected = {key: self.data[key][idx] for key in self.data.keys()}
+
+#         # Assuming the padded sequences have a consistent shape and you want to handle them correctly
+#         x = torch.tensor(selected["X"], dtype=torch.int64)
+
+#         x_dict = {}
+#         x_dict["mode"] = torch.tensor(selected["mode_X"], dtype=torch.int64)
+#         x_dict["user"] = torch.tensor(selected["user_X"][0], dtype=torch.int64)
+#         x_dict["time"] = torch.tensor(selected["start_min_X"] // 15, dtype=torch.int64)
+#         x_dict["length"] = torch.log(torch.tensor(selected["length_X"], dtype=torch.float32))
+#         x_dict["weekday"] = torch.tensor(selected["weekday_X"], dtype=torch.int64)
+
+#         if self.model_type == "deepmove":
+#             x_dict["history_count"] = torch.tensor(selected["history_count"])
+
+#         # Handle padding: if sequences are padded, remove the padding for specific processing
+#         # For example, if padding value is 0, and you want to remove trailing padding:
+#         if x.size(0) > 0:
+#             non_padded_indices = (x != 0).nonzero(as_tuple=True)[0]
+#             x = x[non_padded_indices]
+#             x_dict["mode"] = x_dict["mode"][non_padded_indices]
+#             x_dict["time"] = x_dict["time"][non_padded_indices]
+#             x_dict["length"] = x_dict["length"][non_padded_indices]
+#             x_dict["weekday"] = x_dict["weekday"][non_padded_indices]
+
+#         y = torch.tensor(selected["loc_Y"], dtype=torch.long)
+#         y_mode = torch.tensor(selected["mode_Y"], dtype=torch.long)
+
+#         return x, y, x_dict, y_mode
+# class sp_loc_dataset(torch.utils.data.Dataset):
+#     def __init__(
+#         self,
+#         source_root,
+#         dataset="gc",
+#         data_type="train",
+#         previous_day=7,
+#         model_type="transformer",
+#     ):
+#         self.root = source_root
+#         self.data_type = data_type
+#         self.previous_day = previous_day
+#         self.model_type = model_type
+#         self.dataset = dataset
+
+#         self.data_dir = os.path.join(source_root, "temp")
+#         self.save_path = os.path.join(
+#             self.data_dir,
+#             f"{self.dataset}_{self.model_type}_{self.previous_day}_preprocessed.h5",
+#         )
+
+#         print(f"Initializing dataset from {self.save_path}.")
+#         if Path(self.save_path).is_file():
+#             with h5py.File(self.save_path, "r") as hdf:
+#                 self.len = hdf[f"{self.data_type}/X"].shape[0]  # Length of the dataset
+#         else:
+#             print("Please generate preprocessed data using script (preprocess_h5_data.py).")
+#             exit()
+
+#     def __len__(self):
+#         """Return the length of the current dataset."""
+#         return self.len
+
+#     def __getitem__(self, idx):
+#         with h5py.File(self.save_path, "r") as hdf:
+#             selected = {key: hdf[f"{self.data_type}/{key}"][idx] for key in hdf[f"{self.data_type}"].keys()}
+
+#         # [sequence_len]
+#         x = torch.tensor(selected["X"], dtype=torch.int64)
+
+#         x_dict = {}
+#         # [sequence_len]
+#         x_dict["mode"] = torch.tensor(selected["mode_X"], dtype=torch.int64)
+#         # [1]
+#         x_dict["user"] = torch.tensor(selected["user_X"][0], dtype=torch.int64)
+#         # [sequence_len] in 15 minutes
+#         x_dict["time"] = torch.tensor(selected["start_min_X"] // 15, dtype=torch.int64)
+#         # [sequence_len]
+#         x_dict["length"] = torch.log(torch.tensor(selected["length_X"], dtype=torch.float32))
+#         # [sequence_len]
+#         x_dict["weekday"] = torch.tensor(selected["weekday_X"], dtype=torch.int64)
+
+#         if self.model_type == "deepmove":
+#             # [1]
+#             x_dict["history_count"] = torch.tensor(selected["history_count"])
+
+#         # [self.predict_length]
+#         y = torch.tensor(selected["loc_Y"], dtype=torch.long)
+#         # [self.predict_length]
+#         y_mode = torch.tensor(selected["mode_Y"], dtype=torch.long)
+
+#         return x, y, x_dict, y_mode
+
+### Batch caching
+import h5py
+import torch
+import numpy as np
 
 class sp_loc_dataset(torch.utils.data.Dataset):
     def __init__(
@@ -23,130 +157,171 @@ class sp_loc_dataset(torch.utils.data.Dataset):
         data_type="train",
         previous_day=7,
         model_type="transformer",
+        cache_size=200000,  # Number of samples to cache
     ):
         self.root = source_root
         self.data_type = data_type
         self.previous_day = previous_day
         self.model_type = model_type
         self.dataset = dataset
+        self.cache_size = cache_size
 
         self.data_dir = os.path.join(source_root, "temp")
-        save_path = os.path.join(
+        self.save_path = os.path.join(
             self.data_dir,
-            f"{self.dataset}_{self.model_type}_{previous_day}_{data_type}.pk",
+            f"{self.dataset}_{self.model_type}_{self.previous_day}_preprocessed.h5",
         )
 
-        if Path(save_path).is_file():
-            self.data = pickle.load(open(save_path, "rb"))
+        print(f"Initializing dataset from {self.save_path}.")
+        if Path(self.save_path).is_file():
+            with h5py.File(self.save_path, "r") as hdf:
+                self.len = hdf[f"{self.data_type}/X"].shape[0]  # Length of the dataset
         else:
-            parent = Path(save_path).parent.absolute()
-            if not os.path.exists(parent):
-                os.makedirs(parent)
-            self.data = self.generate_data()
-        self.len = len(self.data)
+            print("Please generate preprocessed data using script (preprocess_h5_data.py).")
+            exit()
+
+        # Initialize cache
+        self.cache = {}
+        self.cache_start_idx = None
 
     def __len__(self):
-        """Return the length of the current dataloader."""
+        """Return the length of the current dataset."""
         return self.len
 
-    def __getitem__(self, idx):
-        selected = self.data[idx]
+    def _load_cache(self, start_idx):
+        print("Get cache")
+        """Load a chunk of data into the cache."""
+        end_idx = min(start_idx + self.cache_size, self.len)
+        with h5py.File(self.save_path, "r") as hdf:
+            self.cache = {key: hdf[f"{self.data_type}/{key}"][start_idx:end_idx] for key in hdf[f"{self.data_type}"].keys()}
+        self.cache_start_idx = start_idx
 
-        # [sequence_len]
+    def __getitem__(self, idx):
+        # print("Get item")
+        if self.cache_start_idx is None or not (self.cache_start_idx <= idx < self.cache_start_idx + self.cache_size):
+            # Load the appropriate cache block
+            self._load_cache(idx - idx % self.cache_size)
+
+        # Access data from the cache
+        cache_idx = idx - self.cache_start_idx
+        selected = {key: self.cache[key][cache_idx] for key in self.cache.keys()}
+        
+        # Assuming the padded sequences have a consistent shape and you want to handle them correctly
         x = torch.tensor(selected["X"], dtype=torch.int64)
 
         x_dict = {}
-        # [sequence_len]
         x_dict["mode"] = torch.tensor(selected["mode_X"], dtype=torch.int64)
-        # [1]
         x_dict["user"] = torch.tensor(selected["user_X"][0], dtype=torch.int64)
-        # # [sequence_len] in 15 minutes
         x_dict["time"] = torch.tensor(selected["start_min_X"] // 15, dtype=torch.int64)
-        # [sequence_len]
         x_dict["length"] = torch.log(torch.tensor(selected["length_X"], dtype=torch.float32))
-        # [sequence_len]
         x_dict["weekday"] = torch.tensor(selected["weekday_X"], dtype=torch.int64)
 
         if self.model_type == "deepmove":
-            # [1]
             x_dict["history_count"] = torch.tensor(selected["history_count"])
 
-        # [self.predict_length]
+        # Handle padding: if sequences are padded, remove the padding for specific processing
+        # For example, if padding value is 0, and you want to remove trailing padding:
+        if x.size(0) > 0:
+            non_padded_indices = (x != 0).nonzero(as_tuple=True)[0]
+            x = x[non_padded_indices]
+            x_dict["mode"] = x_dict["mode"][non_padded_indices]
+            x_dict["time"] = x_dict["time"][non_padded_indices]
+            x_dict["length"] = x_dict["length"][non_padded_indices]
+            x_dict["weekday"] = x_dict["weekday"][non_padded_indices]
+
         y = torch.tensor(selected["loc_Y"], dtype=torch.long)
-        # [self.predict_length]
         y_mode = torch.tensor(selected["mode_Y"], dtype=torch.long)
 
         return x, y, x_dict, y_mode
 
+
+
     def generate_data(self):
-        if self.model_type == "mobtcast":
-            loc_file = pd.read_csv(os.path.join(self.root, f"locations_{self.dataset}.csv"))
-
-            loc_file["center"] = loc_file["center"].apply(wkt.loads)
-            loc_file = gpd.GeoDataFrame(loc_file, crs="EPSG:4326", geometry="center")
-            loc_file["lng"] = loc_file.geometry.x
-            loc_file["lat"] = loc_file.geometry.y
-            loc_file.drop(columns=["center", "user_id", "extent"], inplace=True)
-
-        ori_data = pd.read_csv(os.path.join(self.root, f"dataSet_{self.dataset}.csv"))
-        ori_data.sort_values(by=["user_id", "start_day", "start_min"], inplace=True)
-
-        # encode mode
-        enc = OrdinalEncoder(dtype=np.int64).fit(ori_data["mode"].values.reshape(-1, 1))
-        ori_data["mode"] = enc.transform(ori_data["mode"].values.reshape(-1, 1)) + 1
-        print(ori_data.head(2))
-
-        # truncate too long duration, >2days to 2 days
-        ori_data.loc[ori_data["duration"] > 60 * 24 * 2 - 1, "duration"] = 60 * 24 * 2 - 1
-
-        # classify the datasets, user dependent 0.6, 0.2, 0.2
-        train_data, vali_data, test_data = self.splitDataset(ori_data)
-
-        # encoder user
-        enc = OrdinalEncoder(dtype=np.int64).fit(train_data["user_id"].values.reshape(-1, 1))
-        train_data["user_id"] = enc.transform(train_data["user_id"].values.reshape(-1, 1)) + 1
-        vali_data["user_id"] = enc.transform(vali_data["user_id"].values.reshape(-1, 1)) + 1
-        test_data["user_id"] = enc.transform(test_data["user_id"].values.reshape(-1, 1)) + 1
-        print(train_data.head(2))
-        # encode unseen locations in validation and test into 0
-        enc = OrdinalEncoder(
-            dtype=np.int64,
-            handle_unknown="use_encoded_value",
-            unknown_value=-1,
-        ).fit(train_data["location_id"].values.reshape(-1, 1))
-        # add 2 to account for unseen locations and to account for 0 padding
-        train_data["location_id"] = enc.transform(train_data["location_id"].values.reshape(-1, 1)) + 2
-        vali_data["location_id"] = enc.transform(vali_data["location_id"].values.reshape(-1, 1)) + 2
-        test_data["location_id"] = enc.transform(test_data["location_id"].values.reshape(-1, 1)) + 2
-        print(train_data.head(2))
-        print(
-            train_data["location_id"].max(),
-            train_data["location_id"].unique().shape[0],
+        save_path = os.path.join(
+            self.data_dir,
+            f"{self.dataset}_{self.model_type}_{self.previous_day}_{self.data_type}.h5",
         )
-        if self.model_type == "mobtcast":
-            loc_file["id"] = enc.transform(loc_file["id"].values.reshape(-1, 1)) + 2
 
-            loc_file["lng"] = (
-                2 * (loc_file["lng"] - loc_file["lng"].min()) / (loc_file["lng"].max() - loc_file["lng"].min()) - 1
-            )
-            loc_file["lat"] = (
-                2 * (loc_file["lat"] - loc_file["lat"].min()) / (loc_file["lat"].max() - loc_file["lat"].min()) - 1
-            )
-            loc_file = loc_file.loc[loc_file["id"] != 1].sort_values(by="id")
-            loc_file = loc_file[["lng", "lat"]].values.tolist()
-            save_path = os.path.join(self.data_dir, f"{self.dataset}_loc_{self.previous_day}.pk")
-            save_pk_file(save_path, loc_file)
+        with h5py.File(save_path, "w") as hdf:
+            # Process location data if model_type is "mobtcast"
+            if self.model_type == "mobtcast":
+                loc_file = h5py.File(os.path.join(self.root, f"locations_{self.dataset}.h5"), "r")
+                hdf.create_dataset("locations/lng", data=loc_file["lng"][:], compression="gzip", compression_opts=9)
+                hdf.create_dataset("locations/lat", data=loc_file["lat"][:], compression="gzip", compression_opts=9)
+                print("Processed and saved location data.")
 
-        train_records = self.preProcessDatasets(train_data, "train")
-        validation_records = self.preProcessDatasets(vali_data, "validation")
-        test_records = self.preProcessDatasets(test_data, "test")
+            ori_data = h5py.File(os.path.join(self.root, f"dataSet_{self.dataset}.h5"), "r")
 
+            # Assuming chunk size for processing
+            chunk_size = 10000
+            num_rows = ori_data["user_id"].shape[0]
+
+            all_records = []
+
+            for start in range(0, num_rows, chunk_size):
+                end = min(start + chunk_size, num_rows)
+                chunk = {key: ori_data[key][start:end] for key in ori_data.keys()}
+
+                # Convert chunk to DataFrame for easier processing
+                chunk_df = pd.DataFrame(chunk)
+                chunk_df.sort_values(by=["user_id", "start_day", "start_min"], inplace=True)
+
+                # Encode mode
+                if start == 0:  # Fit encoder on the first chunk
+                    enc_mode = OrdinalEncoder(dtype=np.int64).fit(chunk_df["mode"].values.reshape(-1, 1))
+                chunk_df["mode"] = enc_mode.transform(chunk_df["mode"].values.reshape(-1, 1)) + 1
+
+                # Truncate duration
+                chunk_df.loc[chunk_df["duration"] > 60 * 24 * 2 - 1, "duration"] = 60 * 24 * 2 - 1
+
+                # Split chunk into train, validation, test
+                train_data, vali_data, test_data = self.splitDataset(chunk_df)
+
+                # Encode user_id and location_id
+                if start == 0:  # Fit encoder on the first chunk
+                    enc_user = OrdinalEncoder(dtype=np.int64).fit(train_data["user_id"].values.reshape(-1, 1))
+                    enc_loc = OrdinalEncoder(
+                        dtype=np.int64,
+                        handle_unknown="use_encoded_value",
+                        unknown_value=-1,
+                    ).fit(train_data["location_id"].values.reshape(-1, 1))
+
+                for data in [train_data, vali_data, test_data]:
+                    data["user_id"] = enc_user.transform(data["user_id"].values.reshape(-1, 1)) + 1
+                    data["location_id"] = enc_loc.transform(data["location_id"].values.reshape(-1, 1)) + 2
+
+                # Process datasets
+                for dataset_type, data in zip(["train", "validation", "test"], [train_data, vali_data, test_data]):
+                    valid_records = self.preProcessDatasets(data, dataset_type)
+                    all_records.extend(valid_records)
+
+                    for key in valid_records[0].keys():
+                        data_to_save = np.array([record[key] for record in valid_records])
+
+                        if f"{dataset_type}/{key}" not in hdf:
+                            hdf.create_dataset(
+                                f"{dataset_type}/{key}",
+                                data=data_to_save,
+                                maxshape=(None,),
+                                chunks=True,
+                                compression="gzip",
+                                compression_opts=9
+                            )
+                        else:
+                            dataset = hdf[f"{dataset_type}/{key}"]
+                            dataset.resize((dataset.shape[0] + data_to_save.shape[0]), axis=0)
+                            dataset[-data_to_save.shape[0]:] = data_to_save
+
+                print(f"Processed and saved {dataset_type} dataset chunk: {start} to {end}.")
+
+        # Return the appropriate records based on data_type
         if self.data_type == "test":
-            return test_records
-        if self.data_type == "validation":
-            return validation_records
-        if self.data_type == "train":
-            return train_records
+            return [record for record in all_records if record['type'] == 'test']
+        elif self.data_type == "validation":
+            return [record for record in all_records if record['type'] == 'validation']
+        elif self.data_type == "train":
+            return [record for record in all_records if record['type'] == 'train']
+
 
     def splitDataset(self, totalData):
         """Split dataset into train, vali and test."""
@@ -342,6 +517,7 @@ def collate_fn(batch):
         x_dict_batch[key] = pad_sequence(x_dict_batch[key])
 
     return x_batch, y_batch, x_dict_batch, y_mode_batch
+
 
 
 def deepmove_collate_fn(batch):

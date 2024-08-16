@@ -1,0 +1,94 @@
+misc:
+  # dataset: texas10k
+  # # 2011 known locations, ranging from 2 to 2012
+  # # 0 reserved for padding, 1 reserved for unknown
+  # total_loc_num: 155890
+  # # 111 users, ranging from 1 to 111
+  # # 0 reserved for padding
+  # total_user_num: 10001
+  # dataset: Texas1k
+  # # 2011 known locations, ranging from 2 to 2012
+  # # 0 reserved for padding, 1 reserved for unknown
+  # total_loc_num: 25000
+  # # 111 users, ranging from 1 to 111
+  # # 0 reserved for padding
+  # total_user_num: 350
+  # dataset: Texas10k_min
+  # # 0 reserved for padding, 1 reserved for unknown
+  # total_loc_num: 10000
+  # # 0 reserved for padding
+  # total_user_num: 530
+  # #El Paso
+  # dataset: 'El Paso County'
+  # # 0 reserved for padding, 1 reserved for unknown
+  # total_loc_num: 100000
+  # # 0 reserved for padding
+  # total_user_num: 44000
+  #Harrison
+  # dataset: 'Harrison County'
+  # # 0 reserved for padding, 1 reserved for unknown
+  # total_loc_num: 65400
+  # # 0 reserved for padding
+  # total_user_num: 8430
+  # #Eastland
+  dataset: 'Eastland County'
+  # 0 reserved for padding, 1 reserved for unknown
+  total_loc_num: 37170
+  # 0 reserved for padding
+  total_user_num: 2221
+  # 
+  if_embed_loc: True
+  if_embed_user: True
+
+  if_embed_time: True
+  if_embed_mode: True
+  # 
+  if_embed_next_mode: False
+  # loss
+  if_loss_mode: True
+
+  # how many days in the past we consider
+  previous_day: 7
+  verbose: True
+  debug: False
+  batch_size: 128
+  print_step: 5
+  
+
+embedding:
+  # also size for time and mode
+  base_emb_size: 64
+  # user_embedding added at the end 
+  user_emb_size: 16
+  
+
+model:
+  networkName: transformer
+  # tuned 
+  num_encoder_layers: 4
+  nhead: 8
+  dim_feedforward: 256
+  dropout: 0.1
+  fc_dropout: 0.1
+
+optimiser:
+  optimizer: Adam
+  max_epoch: 100
+  lr: 0.001
+  weight_decay: 0.000001
+  # for Adam
+  beta1: 0.9
+  beta2: 0.999
+  # for SGD
+  momentum: 0.98
+  # for warmup
+  num_warmup_epochs: 2
+  num_training_epochs: 50
+  # for learning rate decay with early stop
+  patience: 3
+  lr_step_size: 1
+  lr_gamma: 0.1
+
+dataset:
+  source_root: ./data/
+  save_root: ./outputs/

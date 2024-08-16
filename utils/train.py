@@ -17,9 +17,11 @@ from utils.dataloader import load_pk_file
 def get_performance_dict(return_dict):
     perf = {
         "correct@1": return_dict["correct@1"],
-        "correct@3": return_dict["correct@3"],
+        # "correct@3": return_dict["correct@3"],
+        "correct@20": return_dict["correct@20"],
         "correct@5": return_dict["correct@5"],
         "correct@10": return_dict["correct@10"],
+        # "correct@20": return_dict["correct@20"],
         "rr": return_dict["rr"],
         "f1": return_dict["f1"],
         "total": return_dict["total"],
@@ -28,6 +30,7 @@ def get_performance_dict(return_dict):
     perf["acc@1"] = perf["correct@1"] / perf["total"] * 100
     perf["acc@5"] = perf["correct@5"] / perf["total"] * 100
     perf["acc@10"] = perf["correct@10"] / perf["total"] * 100
+    perf["acc@20"] = perf["correct@20"] / perf["total"] * 100
     perf["mrr"] = perf["rr"] / perf["total"] * 100
 
     return perf
@@ -57,7 +60,8 @@ def calculate_correct_total_prediction(logits, true_y):
     # top_ = torch.eq(torch.argmax(logits, dim=-1), true_y).sum().cpu().numpy()
 
     result_ls = []
-    for k in [1, 3, 5, 10]:
+    # for k in [1, 3, 5, 10]:
+    for k in [1, 20, 5, 10]:
         if logits.shape[-1] < k:
             prediction = torch.argmax(logits, dim=-1)
         else:
@@ -215,6 +219,7 @@ def train(
 
     running_loss = 0.0
     # 1, 3, 5, 10, rr, total
+    # 1, 20, 5, 10, rr, total
     result_arr = np.array([0, 0, 0, 0, 0, 0, 0], dtype=np.float32)
     n_batches = len(train_loader)
 
@@ -255,7 +260,7 @@ def train(
 
         if (config.verbose) and ((i + 1) % config["print_step"] == 0):
             print(
-                "Epoch {}, {:.1f}%\t loss: {:.3f} acc@1: {:.2f} f1: {:.2f} mrr: {:.2f}, took: {:.2f}s \r".format(
+                "Epoch {}, {:.1f}%\t loss: {:.3f} acc@1: {:.2f} f1: {:.2f} mrr: {:.2f}, took: {:.2f}s, acc@5: {:.2f}, acc@10: {:.2f}, acc@20: {:.2f} \r".format(
                     epoch + 1,
                     100 * (i + 1) / n_batches,
                     running_loss / config["print_step"],
@@ -263,10 +268,14 @@ def train(
                     100 * result_arr[4] / config["print_step"],
                     100 * result_arr[5] / result_arr[-1],
                     time.time() - start_time,
+                    100*result_arr[2] / result_arr[-1],
+                    100*result_arr[3] / result_arr[-1],
+                    100*result_arr[1] / result_arr[-1],
                 ),
                 end="",
                 flush=True,
             )
+            # print(f"Acc@5={result_arr[2]/result_arr[-1]}, \t Acc@10={result_arr[3]/result_arr[-1]}")
 
             # Reset running loss and time
             running_loss = 0.0
@@ -323,11 +332,19 @@ def validate(config, model, data_loader, device):
                 100 * result_arr[5] / result_arr[-1],
             ),
         )
+        print(
+            "acc@5 = {:.2f} acc@10 = {:.2f} acc@20 = {:.2f}".format(
+                100 * result_arr[2] / result_arr[-1],
+                100 * result_arr[3] / result_arr[-1],
+                100 * result_arr[1] / result_arr[-1],
+            ),
+        )
 
     return {
         "val_loss": val_loss,
         "correct@1": result_arr[0],
-        "correct@3": result_arr[1],
+        # "correct@3": result_arr[1],
+        "correct@20": result_arr[1],
         "correct@5": result_arr[2],
         "correct@10": result_arr[3],
         "f1": result_arr[4],
@@ -398,11 +415,19 @@ def test(config, model, data_loader, device):
                 100 * result_arr[5] / result_arr[-1],
             ),
         )
+        print(
+            "acc@5 = {:.2f} acc@10 = {:.2f} acc@20 = {:.2f}".format(
+                100 * result_arr[2] / result_arr[-1],
+                100 * result_arr[3] / result_arr[-1],
+                100 * result_arr[1] / result_arr[-1],
+            ),
+        )
 
     return (
         {
             "correct@1": result_arr[0],
-            "correct@3": result_arr[1],
+            # "correct@3": result_arr[1],
+            "correct@20": result_arr[1],
             "correct@5": result_arr[2],
             "correct@10": result_arr[3],
             "f1": result_arr[4],

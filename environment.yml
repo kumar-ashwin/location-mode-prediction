@@ -5,7 +5,7 @@ channels:
   - defaults
 dependencies:
   - python=3.9.12
-  - trackintel
+  - trackintel=1.2.3
   - pytorch=1.12.1
   - tqdm
   - easydict
@@ -13,3 +13,4 @@ dependencies:
   - pyyaml
   - transformers=4.16.2
   - cudatoolkit=11.3
+  - numpy=1.26.4

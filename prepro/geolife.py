@@ -105,12 +105,18 @@ def get_npp_dataset(config, epsilon=50, dataset="gc"):
 
     # get the time info
     sp_time.drop(columns={"finished_at", "started_at", "geom", "elevation"}, inplace=True)
+    print(sp_time.head(10))
+    # ValueError: 'user_id' is both an index level and a column label, which is ambiguous. Next line is a fix for that
+    sp_time.reset_index(drop=True, inplace=True)
     sp_time.sort_values(by=["user_id", "start_day", "start_min"], inplace=True)
     sp_time = sp_time.reset_index(drop=True)
     sp_time["location_id"] = sp_time["location_id"].astype(int)
     sp_time["user_id"] = sp_time["user_id"].astype(int)
 
-    sp_time.to_csv(os.path.join(".", "data", f"dataSet_{dataset}.csv"), index=False)
+    print("After all operations")
+    print(sp_time.head(10))
+    sp_time.to_csv(os.path.join(".", "data", f"dataSet_{dataset}.csv")) #Try removing the index arg.
+    # sp_time.to_csv(os.path.join(".", "data", f"dataSet_{dataset}.csv"), index=False)
 
 
 def get_mode_geolife(df):

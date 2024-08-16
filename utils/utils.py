@@ -8,7 +8,7 @@ from utils.train import trainNet, test, get_performance_dict
 
 # from utils.train_mobTcast import trainNet_tcast, test_tcast
 from utils.train_mode import trainNet_mode, test_mode
-from utils.dataloader import sp_loc_dataset, collate_fn, deepmove_collate_fn
+from utils.dataloader_new import sp_loc_dataset, collate_fn, deepmove_collate_fn
 
 from models.model import TransEncoder
 from models.model_mode import TransEncoderMode
@@ -106,7 +106,7 @@ def get_models(config, device):
 def get_dataloaders(config):
 
     kwds_train = {
-        "shuffle": True,
+        "shuffle": False,
         "num_workers": 0,
         "batch_size": config["batch_size"],
     }
