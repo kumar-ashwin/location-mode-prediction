@@ -67,6 +67,30 @@ class TransEncoder(nn.Module):
         for p in self.parameters():
             if p.dim() > 1:
                 torch.nn.init.xavier_uniform_(p)
+    
+    def debug_forward(self, src, context_dict, device, next_mode=None) -> Tensor:
+        # To trace where nans appear in the model
+        emb = self.Embedding(src, context_dict)
+        seq_len = context_dict["len"]
+
+        # positional encoding, dropout performed inside
+        src_mask = self._generate_square_subsequent_mask(src.shape[0]).to(device)
+        src_padding_mask = (src == 0).transpose(0, 1).to(device)
+        out = self.encoder(emb, mask=src_mask, src_key_padding_mask=src_padding_mask)
+
+        #print something to see if there are nans
+        print(out)
+
+        # only take the last timestep
+        out = out.gather(
+            0,
+            seq_len.view([1, -1, 1]).expand([1, out.shape[1], out.shape[-1]]) - 1,
+        ).squeeze(0)
+
+        if self.if_embed_next_mode:
+            return self.fc(out, context_dict["user"], mode_emb=self.Embedding.get_modeEmbedding(), next_mode=next_mode), out
+        else:
+            return self.fc.debug_forward(out, context_dict["user"]), out
 
 
 class FullyConnected(nn.Module):
@@ -118,3 +142,30 @@ class FullyConnected(nn.Module):
             return self.fc_loc(out), self.fc_mode(out)
         else:
             return self.fc_loc(out)
+
+    def debug_forward(self, out, user, mode_emb=None, next_mode=None) -> Tensor:
+        # To trace where nans appear in the model
+
+        # with fc output
+        if self.if_embed_user:
+            emb = self.emb_user(user)
+
+            if self.if_embed_next_mode:
+                emb += self.next_mode_fc(mode_emb(next_mode))
+
+            out = torch.cat([out, emb], -1)
+        
+        print(out)
+        
+        out = self.emb_dropout(out)
+
+        # residual
+        if self.if_residual_layer:
+            out = self.norm_1(out + self.fc_dropout(F.relu(self.fc_1(out))))
+
+        print('After residual:', out)
+        
+        if self.if_loss_mode:
+            return self.fc_loc(out), self.fc_mode(out), out
+        else:
+            return self.fc_loc(out), out

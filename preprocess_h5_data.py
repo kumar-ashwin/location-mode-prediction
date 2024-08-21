@@ -9,6 +9,9 @@ import os
 from joblib import Parallel, delayed
 from tqdm import tqdm
 
+# Contains the preprocessing functions for converting into trajcectory data and saving to HDF5
+# Also contains the function to shuffle the data in an existing HDF5 file
+
 def preprocess_and_save_dataset(source_root, dataset_name, output_path, chunk_size=10000, previous_days=7):
     # Initialize sets to collect unique categories
     unique_user_ids = set()
@@ -140,8 +143,8 @@ def split_by_date(df, previous_days):
     train_start = datetime(2021, 1, 1)
     train_end = datetime(2021, 3, 1)
     val_start = datetime(2021, 3, 1)
-    val_end = datetime(2021, 4, 1)
-    test_start = datetime(2021, 4, 1)
+    val_end = datetime(2021, 3, 16)
+    test_start = datetime(2021, 3, 16)
 
     # Initialize empty DataFrames for each split
     train_data = pd.DataFrame()
@@ -247,12 +250,357 @@ def applyParallel(dfGrouped, func, n_jobs, print_progress=True, **kwargs):
     )
     return df_ls
 
+# def shuffle_hdf5_groups(input_path, output_path, chunk_size=10000):
+#     # Define the groups that you want to shuffle
+#     group_names = ["train", "validation", "test"]
+
+#     # Open the original HDF5 file
+#     with h5py.File(input_path, "r") as hdf_in:
+#         # Open a new HDF5 file for the shuffled data
+#         with h5py.File(output_path, "w") as hdf_out:
+#             for group_name in group_names:
+#                 group = hdf_in[group_name]
+                
+#                 # Assume all datasets in the group have the same number of samples (you should validate this if necessary)
+#                 first_dataset = list(group.keys())[0]
+#                 num_samples = group[first_dataset].shape[0]
+
+#                 # Create an array of indices and shuffle it
+#                 indices = np.arange(num_samples)
+#                 np.random.shuffle(indices)
+
+#                 # Create a new group in the output file
+#                 out_group = hdf_out.create_group(group_name)
+
+#                 # Shuffle each dataset within the group
+#                 for key in group.keys():
+#                     original_dataset = group[key]
+#                     # Create corresponding dataset in the output file
+#                     out_dataset = out_group.create_dataset(key, shape=original_dataset.shape, dtype=original_dataset.dtype, maxshape=original_dataset.shape, chunks=True)
+
+#                     # Shuffle data by writing in the order of shuffled indices
+#                     for start in range(0, num_samples, chunk_size):
+#                         end = min(start + chunk_size, num_samples)
+#                         chunk_indices = indices[start:end]
+
+#                         # Sort indices to ensure they are in increasing order
+#                         sorted_chunk_indices = np.sort(chunk_indices)
+#                         sorted_data_chunk = original_dataset[sorted_chunk_indices]
+
+#                         # Reorder data chunk to match the shuffled order
+#                         original_order = np.argsort(chunk_indices)
+#                         shuffled_data_chunk = sorted_data_chunk[original_order]
+
+#                         out_dataset[start:end] = shuffled_data_chunk
+
+#                     print(f"Shuffled dataset '{key}' in group '{group_name}' from {start} to {end}")
+
+#     print(f"Shuffling complete. Shuffled data saved to {output_path}")
+
+
+# import h5py
+# import numpy as np
+
+# def shuffle_hdf5_groups(input_path, output_path, chunk_size=10000, compression="gzip", compression_opts=9):
+#     # Define the groups that you want to shuffle
+#     group_names = ["train", "validation", "test"]
+
+#     # Open the original HDF5 file
+#     with h5py.File(input_path, "r") as hdf_in:
+#         # Open a new HDF5 file for the shuffled data
+#         with h5py.File(output_path, "w") as hdf_out:
+#             for group_name in group_names:
+#                 group = hdf_in[group_name]
+
+#                 # Assume all datasets in the group have the same number of samples
+#                 first_dataset = list(group.keys())[0]
+#                 num_samples = group[first_dataset].shape[0]
+
+#                 # Create an array of indices and shuffle it
+#                 indices = np.arange(num_samples)
+#                 np.random.shuffle(indices)
+
+#                 # Shuffle each dataset within the group
+#                 for key in group.keys():
+#                     original_dataset = group[key]
+                    
+#                     # Create corresponding dataset in the output file with the same properties as the original
+#                     out_dataset = hdf_out.create_dataset(
+#                         f"{group_name}/{key}",
+#                         shape=original_dataset.shape,
+#                         dtype=original_dataset.dtype,
+#                         maxshape=original_dataset.maxshape,  # Preserve maxshape from the original
+#                         chunks=original_dataset.chunks,  # Preserve chunking from the original
+#                         compression=compression,  # Preserve compression from the original
+#                         compression_opts=compression_opts
+#                     )
+
+#                     # Shuffle and write the data in chunks
+#                     for start in range(0, num_samples, chunk_size):
+#                         end = min(start + chunk_size, num_samples)
+#                         chunk_indices = indices[start:end]
+
+#                         # Access data using sorted indices
+#                         sorted_chunk_indices = np.sort(chunk_indices)
+#                         sorted_data_chunk = original_dataset[sorted_chunk_indices]
+
+#                         # Reorder the sorted data chunk according to the original shuffled indices
+#                         original_order = np.argsort(chunk_indices)
+#                         shuffled_data_chunk = sorted_data_chunk[original_order]
+
+#                         # Write the shuffled chunk to the output dataset
+#                         out_dataset[start:end] = shuffled_data_chunk
+
+#                     print(f"Shuffled dataset '{key}' in group '{group_name}'.")
+
+#     print(f"Shuffling complete. Shuffled data saved to {output_path}")
+
+# import h5py
+# import numpy as np
+
+# def shuffle_hdf5_groups(input_path, output_path, chunk_size=100000):
+#     # Define the groups that you want to shuffle
+#     group_names = ["train", "validation", "test"]
+
+#     # Open the original HDF5 file
+#     with h5py.File(input_path, "r") as hdf_in:
+#         # Open a new HDF5 file for the shuffled data
+#         with h5py.File(output_path, "w") as hdf_out:
+#             for group_name in group_names:
+#                 group = hdf_in[group_name]
+
+#                 # Assume all datasets in the group have the same number of samples
+#                 first_dataset = list(group.keys())[0]
+#                 num_samples = group[first_dataset].shape[0]
+
+#                 # Create an array of indices and shuffle it
+#                 indices = np.arange(num_samples)
+#                 np.random.shuffle(indices)
+
+#                 # Process each dataset within the group
+#                 for key in group.keys():
+#                     original_dataset = group[key]
+
+#                     # Create corresponding dataset in the output file with the same properties as the original
+#                     out_dataset = hdf_out.create_dataset(
+#                         f"{group_name}/{key}",
+#                         shape=original_dataset.shape,
+#                         dtype=original_dataset.dtype,
+#                         chunks=original_dataset.chunks,
+#                         compression=original_dataset.compression,
+#                         compression_opts=original_dataset.compression_opts
+#                     )
+
+#                     # Shuffle and write the data in chunks
+#                     for start in range(0, num_samples, chunk_size):
+#                         end = min(start + chunk_size, num_samples)
+#                         chunk_indices = indices[start:end]
+
+#                         # Sort indices for proper HDF5 access and shuffle within each chunk
+#                         sorted_chunk_indices = np.sort(chunk_indices)
+#                         sorted_data_chunk = original_dataset[sorted_chunk_indices]
+#                         original_order = np.argsort(chunk_indices)
+#                         shuffled_data_chunk = sorted_data_chunk[original_order]
+
+#                         # Write the shuffled chunk to the output dataset
+#                         out_dataset[start:end] = shuffled_data_chunk
+
+#                     print(f"Shuffled dataset '{key}' in group '{group_name}'.")
+
+#     print(f"Shuffling complete. Shuffled data saved to {output_path}")
+
+
+import h5py
+import numpy as np
+
+def shuffle_hdf5_groups(input_path, output_path, chunk_size=10000):
+    # Fast version that also doesnt explore the dataset size
+    group_names = ["train", "validation", "test"]
+
+    # Open the original HDF5 file
+    with h5py.File(input_path, "r") as hdf_in:
+        # Open a new HDF5 file for the shuffled data
+        with h5py.File(output_path, "w") as hdf_out:
+            for group_name in group_names:
+                group = hdf_in[group_name]
+                
+                # Assume all datasets in the group have the same number of samples
+                first_dataset = list(group.keys())[0]
+                num_samples = group[first_dataset].shape[0]
+
+                # Create an array of indices and shuffle it
+                indices = np.arange(num_samples)
+                np.random.shuffle(indices)
+
+                # Create a new group in the output file
+                out_group = hdf_out.create_group(group_name)
+
+                # Shuffle each dataset within the group
+                for key in group.keys():
+                    original_dataset = group[key]
+                    
+                    # Determine chunk size and compression (if needed)
+                    chunk_shape = (min(chunk_size, num_samples),) + original_dataset.shape[1:]
+                    out_dataset = out_group.create_dataset(
+                        key, 
+                        shape=original_dataset.shape, 
+                        dtype=original_dataset.dtype, 
+                        maxshape=original_dataset.shape, 
+                        chunks=chunk_shape,
+                        compression="gzip",  # Adjust or remove compression as necessary
+                        compression_opts=4   # Adjust compression level
+                    )
+
+                    # Shuffle data by writing in the order of shuffled indices
+                    print(f"Shuffling dataset '{key}' in group '{group_name}'...")
+                    print(f"Chunk size: {chunk_size}, Total samples: {num_samples}, Total chunks: {num_samples // chunk_size + 1}")
+                    iter = 0
+                    for start in range(0, num_samples, chunk_size):
+                        iter += 1
+                        print(f"Chunk {iter} of {num_samples // chunk_size + 1}")
+                        end = min(start + chunk_size, num_samples)
+                        chunk_indices = indices[start:end]
+
+                        # Sort indices to ensure they are in increasing order
+                        print("Sorting indices...")
+                        sorted_chunk_indices = np.sort(chunk_indices)
+                        print("Accessing data chunk...")
+                        sorted_data_chunk = original_dataset[sorted_chunk_indices]
+
+                        # Reorder data chunk to match the shuffled order
+                        print("Reordering data chunk...")
+                        original_order = np.argsort(chunk_indices)
+                        shuffled_data_chunk = sorted_data_chunk[original_order]
+
+                        # Write the shuffled chunk to the output dataset
+                        print("Writing shuffled data...")
+                        print(f"Writing from {start} to {end}")
+                        out_dataset[start:end] = shuffled_data_chunk
+
+                    print(f"Shuffled dataset '{key}' in group '{group_name}' from {start} to {end}")
+
+    print(f"Shuffling complete. Shuffled data saved to {output_path}")
+
+import numpy as np
+import h5py
+
+def shuffle_hdf5_groups_efficient(input_path, output_path, chunk_size=400000):
+    group_names = ["train", "validation", "test"]
+
+    # Open the original HDF5 file
+    with h5py.File(input_path, "r") as hdf_in:
+        # Open a new HDF5 file for the shuffled data
+        with h5py.File(output_path, "w") as hdf_out:
+            for group_name in group_names:
+                group = hdf_in[group_name]
+
+                # Assume all datasets in the group have the same number of samples
+                first_dataset = list(group.keys())[0]
+                num_samples = group[first_dataset].shape[0]
+
+                # Create a new group in the output file
+                out_group = hdf_out.create_group(group_name)
+
+                print(f"Shuffling group '{group_name}' with {num_samples} samples...")
+
+                # Process the data in chunks
+                for start in range(0, num_samples, chunk_size):
+                    end = min(start + chunk_size, num_samples)
+                    chunk_length = end - start
+
+                    # Generate a shuffle index for this chunk
+                    shuffle_indices = np.arange(chunk_length)
+                    np.random.shuffle(shuffle_indices)
+
+                    # Shuffle each dataset within the group using the chunk-specific shuffle index
+                    for key in group.keys():
+                        print(f"key: {key}, start: {start}, end: {end}, group_name: {group_name}")
+                        original_dataset = group[key]
+
+                        # Create the output dataset with the same shape and dtype if not already created
+                        if key not in out_group:
+                            out_dataset = out_group.create_dataset(
+                                key,
+                                shape=original_dataset.shape,
+                                dtype=original_dataset.dtype,
+                                chunks=(min(chunk_size, num_samples),) + original_dataset.shape[1:],
+                                compression="gzip",  # Optional: adjust or remove compression as necessary
+                                compression_opts=4   # Optional: adjust compression level
+                            )
+                        else:
+                            out_dataset = out_group[key]
+
+                        # Load data for the chunk in its original order
+                        # print(f"Loading chunk from {start} to {end}...")
+                        data_chunk = original_dataset[start:end]
+
+                        # Apply the shuffle index to the chunk
+                        # print("Applying shuffle index to data chunk...")
+                        # print(f"key: {key}, shuffle_indices: {shuffle_indices[:10]}, start: {start}, end: {end}")
+                        shuffled_chunk = data_chunk[shuffle_indices]
+
+                        # Write the shuffled chunk to the output dataset
+                        # print(f"Writing shuffled chunk from {start} to {end}...")
+                        out_dataset[start:end] = shuffled_chunk
+
+                    print(f"Completed shuffling chunk from {start} to {end} in group '{group_name}'.")
+
+    print(f"Shuffling complete. Shuffled data saved to {output_path}")
+
+import h5py
+import os
+import time
+
+def read_first_chunk(hdf5_path, group_name="train", chunk_size=400000):
+    if not os.path.exists(hdf5_path):
+        print(f"File {hdf5_path} does not exist.")
+        return
+
+    with h5py.File(hdf5_path, "r") as hdf_file:
+        if group_name not in hdf_file:
+            print(f"Group '{group_name}' does not exist in the file.")
+            return
+        
+        group = hdf_file[group_name]
+        first_dataset_name = list(group.keys())[0]  # Assuming you want to read the first dataset in the group
+        
+        print(f"Reading the first {chunk_size} entries from dataset '{first_dataset_name}' in group '{group_name}'...")
+        
+        start_time = time.time()
+        
+        # Reading the first chunk of data
+        data_chunk = group[first_dataset_name][:chunk_size]
+        
+        end_time = time.time()
+        print(f"Chunk loaded. Shape: {data_chunk.shape}")
+        print(f"Time taken to load: {end_time - start_time:.4f} seconds")
+        
+        return data_chunk
+
+
 if __name__ == "__main__":
     # Example usage
     previous_days = 7
     source_root = "./data"
     dataset_name = "Eastland County"
-    dataset_name = "El Paso County"
+    # dataset_name = "El Paso County"
     output_path = f"./data/temp/{dataset_name}_transformer_{previous_days}_preprocessed.h5"
-    preprocess_and_save_dataset(source_root, dataset_name, output_path, previous_days=previous_days, chunk_size=400000)
+    #Check if the file exists
+    if os.path.exists(output_path):
+        print(f"File {output_path} already exists. Skipping preprocessing.")
+    else:
+        preprocess_and_save_dataset(source_root, dataset_name, output_path, previous_days=previous_days, chunk_size=400000)
+
+    # Shuffle the preprocessed data
+    shuffle_input = input("Shuffle the preprocessed data? (y/n): ")
+    if shuffle_input.lower() == "y":
+        shuffle_output_path = f"./data/temp/{dataset_name}_transformer_{previous_days}_shuffled.h5"
+        # read_first_chunk(output_path, group_name="train", chunk_size=4000)
+        #if the file exists, delete it
+        if os.path.exists(shuffle_output_path):
+            os.remove(shuffle_output_path)
+        # shuffle_hdf5_groups(output_path, shuffle_output_path, chunk_size=400000)
+        shuffle_hdf5_groups_efficient(output_path, shuffle_output_path, chunk_size=400000)
+    else:
+        print("Shuffling skipped.")
 

@@ -19,11 +19,11 @@ misc:
   # # 0 reserved for padding
   # total_user_num: 530
   # #El Paso
-  # dataset: 'El Paso County'
-  # # 0 reserved for padding, 1 reserved for unknown
-  # total_loc_num: 100000
-  # # 0 reserved for padding
-  # total_user_num: 44000
+  dataset: 'El Paso County'
+  # 0 reserved for padding, 1 reserved for unknown
+  total_loc_num: 100000
+  # 0 reserved for padding
+  total_user_num: 44000
   #Harrison
   # dataset: 'Harrison County'
   # # 0 reserved for padding, 1 reserved for unknown
@@ -31,11 +31,11 @@ misc:
   # # 0 reserved for padding
   # total_user_num: 8430
   # #Eastland
-  dataset: 'Eastland County'
-  # 0 reserved for padding, 1 reserved for unknown
-  total_loc_num: 37170
-  # 0 reserved for padding
-  total_user_num: 2221
+  # dataset: 'Eastland County'
+  # # 0 reserved for padding, 1 reserved for unknown
+  # total_loc_num: 37170
+  # # 0 reserved for padding
+  # total_user_num: 2221
   # 
   if_embed_loc: True
   if_embed_user: True

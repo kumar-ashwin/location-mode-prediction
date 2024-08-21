@@ -237,16 +237,50 @@ def train(
                 logits_loc, logits_mode = model(x, x_dict, device, next_mode=y_mode)
             else:
                 logits_loc, logits_mode = model(x, x_dict, device)
+
+            if torch.isnan(logits_loc).any():
+                print("Nan detected in logits_loc")
+                print("X: ", x)
+                print("logits_loc: ", logits_loc[:10])
+                print("logits_mode: ", logits_mode[:10])
+                print("y: ", y)
+                print("y_mode: ", y_mode)
+                # sys.exit()
             loss_size_loc = CEL(logits_loc, y.reshape(-1))
             loss_size_mode = CEL(logits_mode, y_mode.reshape(-1))
-
+            
+            # check if the loss is nan
+            if torch.isnan(loss_size_loc) or torch.isnan(loss_size_mode):
+                print("Nan detected in loss")
+                print("loss_size_loc: ", loss_size_loc)
+                print("loss_size_mode: ", loss_size_mode)
+                print("logits_loc: ", logits_loc[:10])
+                print("logits_mode: ", logits_mode[:10])
+                print("y: ", y)
+                print("y_mode: ", y_mode)
+                # sys.exit()
             loss_size = loss_size_loc + loss_size_mode
         else:
             logits_loc = model(x, x_dict, device)
             loss_size = CEL(logits_loc, y.reshape(-1))
 
         optim.zero_grad()
-        loss_size.backward()
+        # Check if loss tries to access illegal memory. Safeguard
+        if torch.isnan(loss_size):
+            print("Nan detected in loss item. Skip backward")
+            optim.zero_grad()
+            continue
+        else:
+            try:
+                loss_size.backward()
+            except:
+                print("Some issue arised in backward pass. Skip backward")
+                print("logits_loc: ", logits_loc[:10])
+                print("logits_mode: ", logits_mode[:10])
+                print("y: ", y)
+                print("y_mode: ", y_mode)
+                # clear the loss
+
 
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
         optim.step()
@@ -254,7 +288,16 @@ def train(
             scheduler.step()
 
         # Print statistics
-        running_loss += loss_size.item()
+        # #Chcek if the loss item is nan
+        if torch.isnan(loss_size):
+            print("Nan detected in loss item. Skip adding to running loss")
+            print("logits_loc: ", logits_loc[:10])
+            # print("logits_mode: ", logits_mode[:10])
+            print("y: ", y)
+            print("y_mode: ", y_mode)
+        else:
+            running_loss += loss_size.item()
+
 
         result_arr += calculate_correct_total_prediction(logits_loc, y)
 
@@ -288,7 +331,32 @@ def train(
         print()
     return globaliter
 
+    # def debug_forward(self, out, user, mode_emb=None, next_mode=None) -> Tensor:
+    #     # To trace where nans appear in the model
 
+    #     # with fc output
+    #     if self.if_embed_user:
+    #         emb = self.emb_user(user)
+
+    #         if self.if_embed_next_mode:
+    #             emb += self.next_mode_fc(mode_emb(next_mode))
+
+    #         out = torch.cat([out, emb], -1)
+        
+    #     print(out)
+        
+    #     out = self.emb_dropout(out)
+
+    #     # residual
+    #     if self.if_residual_layer:
+    #         out = self.norm_1(out + self.fc_dropout(F.relu(self.fc_1(out))))
+
+    #     print('After residual:', out)
+        
+    #     if self.if_loss_mode:
+    #         return self.fc_loc(out), self.fc_mode(out), out
+    #     else:
+    #         return self.fc_loc(out), out
 def validate(config, model, data_loader, device):
 
     total_val_loss = 0
@@ -301,7 +369,7 @@ def validate(config, model, data_loader, device):
         for inputs in data_loader:
 
             x, y, x_dict, y_mode = send_to_device(inputs, device, config)
-
+            print("X: ", x)
             if config.if_loss_mode:
                 if config.if_embed_next_mode:
                     logits_loc, logits_mode = model(x, x_dict, device, next_mode=y_mode)
@@ -311,12 +379,39 @@ def validate(config, model, data_loader, device):
                 loss_size_loc = CEL(logits_loc, y.reshape(-1))
                 loss_size_mode = CEL(logits_mode, y_mode.reshape(-1))
 
+                # check if the loss is nan
+                if torch.isnan(loss_size_loc) or torch.isnan(loss_size_mode):
+                    print("Nan detected in validation loss")
+                    print("loss_size_loc: ", loss_size_loc)
+                    print("loss_size_mode: ", loss_size_mode)
+                    print("logits_loc: ", logits_loc[:10])
+                    print("logits_mode: ", logits_mode[:10])
+                    print("y: ", y)
+                    print("y_mode: ", y_mode)
+
+                    print("Debug forward")
+                    model.debug_forward(x, x_dict, device, next_mode=y_mode)
+                    exit()
+                    
+
                 loss_size = loss_size_loc + loss_size_mode
             else:
                 logits_loc = model(x, x_dict, device)
                 loss_size = CEL(logits_loc, y.reshape(-1))
+                #check if the loss is nan
+                if torch.isnan(loss_size):
+                    print("Nan detected in validation loss (size)")
+                    print("X: ", x)
+                    print("logits_loc: ", logits_loc[:10])
+                    print("y: ", y)
+                    print("loss size: ", loss_size)
+            
 
-            total_val_loss += loss_size.item()
+            if torch.isnan(loss_size):
+                print("Nan detected in validation loss item. Skip adding to running loss")
+                exit()
+            else:
+                total_val_loss += loss_size.item()
 
             result_arr += calculate_correct_total_prediction(logits_loc, y.view(-1))
 

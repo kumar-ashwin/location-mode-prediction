@@ -77,7 +77,7 @@ class AllEmbedding(nn.Module):
             if config.dataset == "geolife":
                 mode_size = 4
             else:
-                mode_size = 8
+                mode_size = 2 # only one mode, do not predict
             self.emb_mode = nn.Embedding(mode_size, d_input)
 
         # time is in minutes, possible time for each day is 60 * 24 // 30

@@ -134,22 +134,31 @@ import h5py
 #         x_dict["weekday"] = torch.tensor(selected["weekday_X"], dtype=torch.int64)
 
 #         if self.model_type == "deepmove":
-#             # [1]
 #             x_dict["history_count"] = torch.tensor(selected["history_count"])
 
-#         # [self.predict_length]
+#         # Handle padding: if sequences are padded, remove the padding for specific processing
+#         # For example, if padding value is 0, and you want to remove trailing padding:
+#         if x.size(0) > 0:
+#             non_padded_indices = (x != 0).nonzero(as_tuple=True)[0]
+#             x = x[non_padded_indices]
+#             x_dict["mode"] = x_dict["mode"][non_padded_indices]
+#             x_dict["time"] = x_dict["time"][non_padded_indices]
+#             x_dict["length"] = x_dict["length"][non_padded_indices]
+#             x_dict["weekday"] = x_dict["weekday"][non_padded_indices]
+
 #         y = torch.tensor(selected["loc_Y"], dtype=torch.long)
-#         # [self.predict_length]
 #         y_mode = torch.tensor(selected["mode_Y"], dtype=torch.long)
 
 #         return x, y, x_dict, y_mode
 
-### Batch caching
-import h5py
-import torch
-import numpy as np
 
+### Batch caching
 class sp_loc_dataset(torch.utils.data.Dataset):
+    """
+    Dataset class for spatial location prediction.
+    Should be used without shuffle in DataLoader.
+    Requires preprocessed data in the form of a .h5 file, which is already shuffled.
+    """
     def __init__(
         self,
         source_root,
@@ -157,7 +166,7 @@ class sp_loc_dataset(torch.utils.data.Dataset):
         data_type="train",
         previous_day=7,
         model_type="transformer",
-        cache_size=200000,  # Number of samples to cache
+        cache_size=400000,  # Number of samples to cache
     ):
         self.root = source_root
         self.data_type = data_type
@@ -169,7 +178,8 @@ class sp_loc_dataset(torch.utils.data.Dataset):
         self.data_dir = os.path.join(source_root, "temp")
         self.save_path = os.path.join(
             self.data_dir,
-            f"{self.dataset}_{self.model_type}_{self.previous_day}_preprocessed.h5",
+            # f"{self.dataset}_{self.model_type}_{self.previous_day}_preprocessed.h5",
+            f"{self.dataset}_{self.model_type}_{self.previous_day}_shuffled.h5",
         )
 
         print(f"Initializing dataset from {self.save_path}.")
@@ -177,7 +187,7 @@ class sp_loc_dataset(torch.utils.data.Dataset):
             with h5py.File(self.save_path, "r") as hdf:
                 self.len = hdf[f"{self.data_type}/X"].shape[0]  # Length of the dataset
         else:
-            print("Please generate preprocessed data using script (preprocess_h5_data.py).")
+            print("Please generate preprocessed data using script (preprocess_h5_data.py) and shuffle it.")
             exit()
 
         # Initialize cache
@@ -220,7 +230,6 @@ class sp_loc_dataset(torch.utils.data.Dataset):
             x_dict["history_count"] = torch.tensor(selected["history_count"])
 
         # Handle padding: if sequences are padded, remove the padding for specific processing
-        # For example, if padding value is 0, and you want to remove trailing padding:
         if x.size(0) > 0:
             non_padded_indices = (x != 0).nonzero(as_tuple=True)[0]
             x = x[non_padded_indices]
@@ -233,6 +242,163 @@ class sp_loc_dataset(torch.utils.data.Dataset):
         y_mode = torch.tensor(selected["mode_Y"], dtype=torch.long)
 
         return x, y, x_dict, y_mode
+# import threading
+# import torch
+# import os
+# import h5py
+# from pathlib import Path
+
+# class sp_loc_dataset(torch.utils.data.Dataset):
+#     """
+#     Dataset class for spatial location prediction.
+#     Should be used without shuffle in DataLoader.
+#     Requires preprocessed data in the form of a .h5 file, which is already shuffled.
+#     """
+#     def __init__(
+#         self,
+#         source_root,
+#         dataset="gc",
+#         data_type="train",
+#         previous_day=7,
+#         model_type="transformer",
+#         cache_size=400000,  # Number of samples to cache
+#     ):
+#         self.root = source_root
+#         self.data_type = data_type
+#         self.previous_day = previous_day
+#         self.model_type = model_type
+#         self.dataset = dataset
+#         self.cache_size = cache_size
+
+#         # Construct the path to the preprocessed data file
+#         self.data_dir = os.path.join(source_root, "temp")
+#         self.save_path = os.path.join(
+#             self.data_dir,
+#             f"{self.dataset}_{self.model_type}_{self.previous_day}_shuffled.h5",
+#         )
+
+#         # Check if the data file exists and get the length of the dataset
+#         if Path(self.save_path).is_file():
+#             with h5py.File(self.save_path, "r") as hdf:
+#                 self.len = hdf[f"{self.data_type}/X"].shape[0]
+#         else:
+#             exit()
+
+#         # Initialize the cache and threading-related attributes
+#         self.cache = {}
+#         self.cache_start_idx = None
+#         self.next_cache = {}
+#         self.next_cache_start_idx = None
+#         self.preload_thread = None
+#         self.lock = threading.Lock()
+
+#     def __len__(self):
+#         """Return the length of the current dataset."""
+#         return self.len
+
+#     def _load_cache(self, start_idx):
+#         """
+#         Load a chunk of data into the cache starting from a specific index.
+#         This method also initiates the preloading of the next chunk.
+#         """
+#         print("Loading cache")
+#         end_idx = min(start_idx + self.cache_size, self.len)
+#         with h5py.File(self.save_path, "r") as hdf:
+#             with self.lock:
+#                 self.cache = {key: hdf[f"{self.data_type}/{key}"][start_idx:end_idx] for key in hdf[f"{self.data_type}"].keys()}
+#                 self.cache_start_idx = start_idx
+
+#         # Preload the next chunk if there is more data left
+#         if end_idx < self.len:
+#             self._preload_next_cache(end_idx)
+
+#     def _preload_next_cache(self, start_idx):
+#         """
+#         Preload the next cache chunk in a separate thread to avoid waiting during data access.
+#         """
+#         if self.preload_thread and self.preload_thread.is_alive():
+#             return  # Skip preloading if the previous preload is still running
+
+#         def preload():
+#             print(f"Starting to preload cache starting at index {start_idx}.")
+#             end_idx = min(start_idx + self.cache_size, self.len)
+#             with h5py.File(self.save_path, "r") as hdf:
+#                 with self.lock:
+#                     self.next_cache = {key: hdf[f"{self.data_type}/{key}"][start_idx:end_idx] for key in hdf[f"{self.data_type}"].keys()}
+#                     self.next_cache_start_idx = start_idx
+#             print(f"Finished preloading cache from index {start_idx} to {end_idx}.")
+
+#         self.preload_thread = threading.Thread(target=preload)
+#         self.preload_thread.start()
+
+#     def _switch_to_next_cache(self):
+#         """
+#         Switch to the preloaded cache chunk.
+#         This method is called when the data being accessed falls within the preloaded chunk.
+#         """
+#         print("\n Switching to next cache")
+#         with self.lock:
+#             self.cache = self.next_cache
+#             self.cache_start_idx = self.next_cache_start_idx
+#             self.next_cache = {}
+#             self.next_cache_start_idx = None
+        
+
+#     def __getitem__(self, idx):
+#         """
+#         Retrieve a data sample from the dataset at the specified index.
+#         This method handles cache loading and switching.
+#         """
+#         if self.cache_start_idx is None or not (self.cache_start_idx <= idx < self.cache_start_idx + self.cache_size):
+#             # If the requested index is not within the current cache, load the appropriate cache block
+#             if self.next_cache_start_idx is not None and self.next_cache_start_idx <= idx < self.next_cache_start_idx + self.cache_size:
+#                 self._switch_to_next_cache()
+#                 # Start preloading the next block immediately after switching
+#                 next_start_idx = self.cache_start_idx + self.cache_size
+#                 if next_start_idx < self.len:
+#                     self._preload_next_cache(next_start_idx)
+#             else:
+#                 self._load_cache(idx - idx % self.cache_size)
+
+#         # Access data from the cache
+#         cache_idx = idx - self.cache_start_idx
+#         selected = {key: self.cache[key][cache_idx] for key in self.cache.keys()}
+        
+#         # Convert the data to tensors
+#         x = torch.tensor(selected["X"], dtype=torch.int64)
+
+#         x_dict = {}
+#         x_dict["mode"] = torch.tensor(selected["mode_X"], dtype=torch.int64)
+#         x_dict["user"] = torch.tensor(selected["user_X"][0], dtype=torch.int64)
+#         x_dict["time"] = torch.tensor(selected["start_min_X"] // 15, dtype=torch.int64)
+#         x_dict["length"] = torch.log(torch.tensor(selected["length_X"], dtype=torch.float32))
+#         x_dict["weekday"] = torch.tensor(selected["weekday_X"], dtype=torch.int64)
+
+#         if self.model_type == "deepmove":
+#             x_dict["history_count"] = torch.tensor(selected["history_count"])
+
+#         # Handle padding: remove padding if sequences are padded
+#         if x.size(0) > 0:
+#             non_padded_indices = (x != 0).nonzero(as_tuple=True)[0]
+#             x = x[non_padded_indices]
+#             x_dict["mode"] = x_dict["mode"][non_padded_indices]
+#             x_dict["time"] = x_dict["time"][non_padded_indices]
+#             x_dict["length"] = x_dict["length"][non_padded_indices]
+#             x_dict["weekday"] = x_dict["weekday"][non_padded_indices]
+
+#         y = torch.tensor(selected["loc_Y"], dtype=torch.long)
+#         y_mode = torch.tensor(selected["mode_Y"], dtype=torch.long)
+
+#         #Check for any Nan causing issues
+#         if torch.isnan(x).any() or torch.isnan(y).any() or torch.isnan(y_mode).any():
+#             print("Nan detected")
+#             print(x)
+#             print(x_dict)
+#             print(y)
+#             print(y_mode)
+#             exit()
+
+#         return x, y, x_dict, y_mode
 
 
 

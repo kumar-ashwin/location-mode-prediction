@@ -116,7 +116,7 @@ def get_dataloaders(config):
         "batch_size": config["batch_size"],
     }
     kwds_test = {
-        "shuffle": True,
+        "shuffle": False,
         "num_workers": 0,
         "batch_size": config["batch_size"],
     }
