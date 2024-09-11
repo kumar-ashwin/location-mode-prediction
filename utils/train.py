@@ -214,7 +214,7 @@ def train(
     scheduler_count,
     globaliter,
 ):
-
+    torch.autograd.set_detect_anomaly(True)
     model.train()
 
     running_loss = 0.0
@@ -232,6 +232,13 @@ def train(
 
         x, y, x_dict, y_mode = send_to_device(inputs, device, config)
 
+        for key, value in x_dict.items():
+            if torch.isnan(value).any():
+                print(f"NaN detected in input {key}")
+        if torch.isnan(x).any():
+            print("NaN detected in x")
+
+
         if config.if_loss_mode:
             if config.if_embed_next_mode:
                 logits_loc, logits_mode = model(x, x_dict, device, next_mode=y_mode)
@@ -245,7 +252,7 @@ def train(
                 print("logits_mode: ", logits_mode[:10])
                 print("y: ", y)
                 print("y_mode: ", y_mode)
-                # sys.exit()
+                sys.exit()
             loss_size_loc = CEL(logits_loc, y.reshape(-1))
             loss_size_mode = CEL(logits_mode, y_mode.reshape(-1))
             
@@ -256,13 +263,15 @@ def train(
                 print("loss_size_mode: ", loss_size_mode)
                 print("logits_loc: ", logits_loc[:10])
                 print("logits_mode: ", logits_mode[:10])
-                print("y: ", y)
-                print("y_mode: ", y_mode)
-                # sys.exit()
+                print("y: ", y.reshape(-1))
+                print("y_mode: ", y_mode.reshape(-1))
+                sys.exit()
             loss_size = loss_size_loc + loss_size_mode
         else:
             logits_loc = model(x, x_dict, device)
             loss_size = CEL(logits_loc, y.reshape(-1))
+
+        # print("Loss size: ", loss_size)
 
         optim.zero_grad()
         # Check if loss tries to access illegal memory. Safeguard
@@ -281,6 +290,10 @@ def train(
                 print("y_mode: ", y_mode)
                 # clear the loss
 
+        for param in model.parameters():
+            if param.grad is not None:
+                if torch.isnan(param.grad).any():
+                    print("NaN detected in gradients.")
 
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
         optim.step()

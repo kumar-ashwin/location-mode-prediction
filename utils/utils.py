@@ -1,4 +1,4 @@
-from msilib.schema import Error
+# from msilib.schema import Error
 import yaml
 import random, torch, os
 import numpy as np
@@ -95,7 +95,7 @@ def get_models(config, device):
         model = TransEncoderMode(config=config).to(device)
 
     else:
-        raise Error
+        raise ValueError("Invalid network name")
     total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
     print("Total number of trainable parameters: ", total_params)

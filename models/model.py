@@ -8,6 +8,84 @@ import torch.nn.functional as F
 from models.embed import AllEmbedding
 
 
+
+class CustomTransformerEncoderLayer(nn.Module):
+    def __init__(self, d_model, nhead, dim_feedforward=2048, dropout=0.1, activation="relu"):
+        super(CustomTransformerEncoderLayer, self).__init__()
+        self.self_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout)
+        self.linear1 = nn.Linear(d_model, dim_feedforward)
+        self.dropout = nn.Dropout(dropout)
+        self.linear2 = nn.Linear(dim_feedforward, d_model)
+
+        self.norm1 = nn.LayerNorm(d_model)
+        self.norm2 = nn.LayerNorm(d_model)
+        self.dropout1 = nn.Dropout(dropout)
+        self.dropout2 = nn.Dropout(dropout)
+
+        self.activation = F.gelu if activation == "gelu" else F.relu
+
+    def forward(self, src, src_mask=None, src_key_padding_mask=None):
+        # Self-attention
+        src2, _ = self.self_attn(src, src, src, attn_mask=src_mask, key_padding_mask=src_key_padding_mask)
+        
+        # Clip values to prevent instability before LayerNorm
+        src2 = torch.clamp(src2, min=-5, max=5)
+
+        # Log statistics only if NaN or Inf is detected
+        self.log_tensor_if_nan_or_inf(src2, "Attention Output After Clipping (src2)")
+
+        # Add & Norm (first layer normalization)
+        src = src + self.dropout1(src2)
+        
+        # Clipping before applying LayerNorm
+        src = torch.clamp(src, min=-5, max=5)
+        self.log_tensor_if_nan_or_inf(src, "Before LayerNorm1")
+
+        # Apply LayerNorm
+        src = self.norm1(src)
+        self.log_tensor_if_nan_or_inf(src, "After LayerNorm1")
+
+        # Clipping after applying LayerNorm
+        src = torch.clamp(src, min=-5, max=5)
+
+        # Feedforward network
+        src2 = self.linear2(self.dropout(self.activation(self.linear1(src))))
+        
+        # Clip values to prevent instability before second LayerNorm
+        src2 = torch.clamp(src2, min=-5, max=5)
+        self.log_tensor_if_nan_or_inf(src2, "Feedforward Output After Clipping (src2)")
+
+        # Add & Norm (second layer normalization)
+        src = src + self.dropout2(src2)
+        self.log_tensor_if_nan_or_inf(src, "After Add & Dropout2")
+
+        # Clipping before applying LayerNorm
+        src = torch.clamp(src, min=-5, max=5)
+
+        # Apply LayerNorm
+        src = self.norm2(src)
+        self.log_tensor_if_nan_or_inf(src, "After LayerNorm2")
+
+        # Clipping after applying LayerNorm
+        src = torch.clamp(src, min=-5, max=5)
+
+        return src
+
+    def log_tensor_if_nan_or_inf(self, tensor, tensor_name):
+        """Log tensor statistics only if NaN or Inf is detected."""
+        if torch.isnan(tensor).any() or torch.isinf(tensor).any():
+            print(f"NaN or Inf detected in {tensor_name}.")
+            print(f"{tensor_name} Values: ", tensor)
+            print(f"Stats for {tensor_name}:")
+            print(f"  Mean: {torch.mean(tensor).item():.4f}")
+            print(f"  Std: {torch.std(tensor).item():.4f}")
+            print(f"  Min: {torch.min(tensor).item():.4f}")
+            print(f"  Max: {torch.max(tensor).item():.4f}")
+            print(f"  Shape: {tensor.shape}")
+            exit()
+
+
+
 class TransEncoder(nn.Module):
     def __init__(self, config) -> None:
         super(TransEncoder, self).__init__()
@@ -16,7 +94,8 @@ class TransEncoder(nn.Module):
         self.Embedding = AllEmbedding(self.d_input, config)
 
         # encoder
-        encoder_layer = torch.nn.TransformerEncoderLayer(
+        # encoder_layer = torch.nn.TransformerEncoderLayer(
+        encoder_layer = CustomTransformerEncoderLayer(
             self.d_input,
             nhead=config.nhead,
             activation="gelu",
@@ -38,6 +117,12 @@ class TransEncoder(nn.Module):
 
     def forward(self, src, context_dict, device, next_mode=None) -> Tensor:
         emb = self.Embedding(src, context_dict)
+        # Embedding layer output check
+        if torch.isnan(emb).any():
+            print("NaN detected after Embedding")
+            print("Embedding output:", emb)
+            # return emb  # or exit()
+
         seq_len = context_dict["len"]
 
         # positional encoding, dropout performed inside
@@ -45,16 +130,36 @@ class TransEncoder(nn.Module):
         src_padding_mask = (src == 0).transpose(0, 1).to(device)
         out = self.encoder(emb, mask=src_mask, src_key_padding_mask=src_padding_mask)
 
+        # Transformer encoder output check
+        if torch.isnan(out).any():
+            print("NaN detected after Transformer Encoder")
+            print("Transformer output:", out)
+            # return out
+        
         # only take the last timestep
         out = out.gather(
             0,
             seq_len.view([1, -1, 1]).expand([1, out.shape[1], out.shape[-1]]) - 1,
         ).squeeze(0)
 
+        if torch.isnan(out).any():
+            print("NaN detected after gather operation")
+            print("Gather output:", out)
+            # return out
+
+        # Fully connected layer output check
         if self.if_embed_next_mode:
-            return self.fc(out, context_dict["user"], mode_emb=self.Embedding.get_modeEmbedding(), next_mode=next_mode)
+            fc_output = self.fc(out, context_dict["user"], mode_emb=self.Embedding.get_modeEmbedding(), next_mode=next_mode)
         else:
-            return self.fc(out, context_dict["user"])
+            fc_output = self.fc(out, context_dict["user"])
+        
+        if torch.isnan(fc_output[0]).any():
+            print("NaN detected after Fully Connected Layer")
+            print("Fully Connected output:", fc_output)
+            return fc_output
+
+        return fc_output
+
 
     def _generate_square_subsequent_mask(self, sz):
         return torch.triu(torch.full((sz, sz), float("-inf")), diagonal=1)
@@ -72,6 +177,8 @@ class TransEncoder(nn.Module):
         # To trace where nans appear in the model
         emb = self.Embedding(src, context_dict)
         seq_len = context_dict["len"]
+
+
 
         # positional encoding, dropout performed inside
         src_mask = self._generate_square_subsequent_mask(src.shape[0]).to(device)

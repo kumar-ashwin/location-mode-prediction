@@ -45,7 +45,7 @@ misc:
   # 
   if_embed_next_mode: False
   # loss
-  if_loss_mode: True
+  if_loss_mode: False
 
   # how many days in the past we consider
   previous_day: 7
@@ -67,7 +67,7 @@ model:
   # tuned 
   num_encoder_layers: 4
   nhead: 8
-  dim_feedforward: 256
+  dim_feedforward: 512
   dropout: 0.1
   fc_dropout: 0.1
 
