@@ -1,0 +1,95 @@
+In dataloader.py, splitDataset(). line 167 onwards seems sus??
+    Do they only take users that are in the intersection of the two datasets??
+
+    22:05
+    Trained in 2 mins, 27 epochs
+    Acc@1 26.42%  f1 = 18.14 mrr = 38.19
+
+
+Valid sequences:
+    getValidSequenceUsers() in dataloader.py
+    self.previous_day is the minimum length of days in the sequence
+    
+    DF"st_daY"> row['st_day'] - previous_day
+        Only keep the rows within the last 7 days
+
+    Hist should have at least two locations
+
+    Each user's dict: 
+        data_dict["X"] = hist["location_id"].values
+        data_dict["user_X"] = hist["user_id"].values
+        data_dict["start_min_X"] = hist["start_min"].values
+        data_dict["mode_X"] = hist["mode"].values
+        data_dict["length_X"] = hist["length_m"].values
+        data_dict["weekday_X"] = hist["weekday"].values
+
+        # the next location is the Y
+        data_dict["loc_Y"] = int(row["location_id"])
+        # the next mode is the mode_Y
+        data_dict["mode_Y"] = int(row["mode"])
+
+    How does this flow into the MODEL??????
+
+latlong is used for mobtcast kind of model.
+
+
+WILL EMEET: 23-07
+CONVERT DATA TO BE SAME FORMAT
+Try with all pois, then 100k pois, then 10k
+Try with the same format, 7 days history. 
+
+Ask Josh how to quantify the answers into a smaller set
+    Ask if we can see an example survey
+One small optoin: given all other data, predict the depression answers
+Another, we can predict the emotions. Scale for each emotion, minimize l2 loss
+    -translate latlon into poi equivalent
+
+Shoot Hanyu an email asking for SHAP update
+
+
+Dedicate some time to add some fairness metrics
+
+NOTES:
+!!THE CHUNKS MIGHT HAVE BREAKS BETWEEN USERS!!!!
+
+Using 0 as a padding token for users, and 0,1 as padding and unknown tokens for locations.
+Loading a full chunk is always useful. Loading a smaller cache chunk takes the same time.
+
+Started a training ruyn for El Paso at 19:48pm 16-08-2024
+
+Getting fails because of nan loss. 
+
+Restarted with some loss logging, at 00:00 17-08-2024
+    see utils/train.py
+
+    Removed loss_mode in config.
+    This seemed to have avoided the nan, but resulted in an illegal memory access error when doing loss_backward
+Cache may be the culprit
+Trying with loss_mode, skipping backward with a try - catch
+    Started at 11:11 17-08-2024
+    Leads to Nans.
+    But does not crash at least for 4 epochs
+
+Trying without loss mode see if that helps nans
+    Started at 13:56 17-08-2024
+    Validation loss in nan after 1 epoch
+
+Adding some logging in the validation loop to see where the nan is coming from
+    Started at 15:07 17-08-2024
+    Nan is coming from the loss calculation?
+    Ran into an error (human error). Rerunning
+    16:05
+    This also crashed with out of bounds memory access.
+
+Trying without caching.
+    Started at 20:52.
+    Expecting it to be slower, but should not fail??
+    Slows dows significantly after ~4 epochs
+    6th epoch took ~6 hours or more.
+
+Its possible the mode embedding is leading to nans
+    By default, it assumes 8 modes. So it might be better to not embed mode.
+
+Nans first detected in embedding layer.
+Trying custom embedding layer
+!!ALSO REDUCED LR. CHECK THIS.!!
