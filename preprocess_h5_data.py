@@ -583,7 +583,9 @@ if __name__ == "__main__":
     previous_days = 7
     source_root = "./data"
     dataset_name = "Eastland County"
-    # dataset_name = "El Paso County"
+    dataset_name = "El Paso County"
+    dataset_name = "DallasMetro"
+    dataset_name = "DallasTarrant"
     output_path = f"./data/temp/{dataset_name}_transformer_{previous_days}_preprocessed.h5"
     #Check if the file exists
     if os.path.exists(output_path):
@@ -600,7 +602,7 @@ if __name__ == "__main__":
         if os.path.exists(shuffle_output_path):
             os.remove(shuffle_output_path)
         # shuffle_hdf5_groups(output_path, shuffle_output_path, chunk_size=400000)
-        shuffle_hdf5_groups_efficient(output_path, shuffle_output_path, chunk_size=400000)
+        shuffle_hdf5_groups_efficient(output_path, shuffle_output_path, chunk_size=200000) #Had to do 200000 for DallasMetro, 400000 caused error (chunk size must be < 4GB)
     else:
         print("Shuffling skipped.")
 

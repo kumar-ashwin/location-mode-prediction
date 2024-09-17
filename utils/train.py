@@ -140,6 +140,9 @@ def trainNet(config, model, train_loader, val_loader, device, log_dir):
     if config.verbose:
         print("Current learning rate: ", scheduler.get_last_lr()[0])
 
+    #init log.txt
+    with open("log.txt", "w") as f:
+        f.write("")
     # Time for printing
     training_start_time = time.time()
     globaliter = 0
@@ -332,6 +335,24 @@ def train(
                 flush=True,
             )
             # print(f"Acc@5={result_arr[2]/result_arr[-1]}, \t Acc@10={result_arr[3]/result_arr[-1]}")
+            # every 1%, write the output to log.txt (append)
+            if (i + 1) % (n_batches // 100) == 0:
+                with open("log.txt", "a") as f:
+                    f.write(
+                        "Epoch {}, {:.1f}%\t loss: {:.3f} acc@1: {:.2f} f1: {:.2f} mrr: {:.2f}, took: {:.2f}s, acc@5: {:.2f}, acc@10: {:.2f}, acc@20: {:.2f} \n".format(
+                            epoch + 1,
+                            100 * (i + 1) / n_batches,
+                            running_loss / config["print_step"],
+                            100 * result_arr[0] / result_arr[-1],
+                            100 * result_arr[4] / config["print_step"],
+                            100 * result_arr[5] / result_arr[-1],
+                            time.time() - start_time,
+                            100*result_arr[2] / result_arr[-1],
+                            100*result_arr[3] / result_arr[-1],
+                            100*result_arr[1] / result_arr[-1],
+                        )
+                    )
+
 
             # Reset running loss and time
             running_loss = 0.0
@@ -382,7 +403,7 @@ def validate(config, model, data_loader, device):
         for inputs in data_loader:
 
             x, y, x_dict, y_mode = send_to_device(inputs, device, config)
-            print("X: ", x)
+            # print("X: ", x)
             if config.if_loss_mode:
                 if config.if_embed_next_mode:
                     logits_loc, logits_mode = model(x, x_dict, device, next_mode=y_mode)

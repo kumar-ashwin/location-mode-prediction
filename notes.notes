@@ -93,3 +93,21 @@ Its possible the mode embedding is leading to nans
 Nans first detected in embedding layer.
 Trying custom embedding layer
 !!ALSO REDUCED LR. CHECK THIS.!!
+
+Training with El Paso, with much larger model
+    batch_size: 256
+    embedding:
+        base_emb_size: 256 # ws 64
+        user_emb_size: 1 # was 16
+    model:
+        num_encoder_layers: 8 # was 4
+        nhead: 8
+        dim_feedforward: 1024 #was 512
+    
+    Batch size 256 (57M parameters) takes ~20GB of VRAM.
+    1 epoch takes ~1 hour.
+
+    Final acc@20~11% (Test) afer 21 epochs.
+
+Dallas metro has much higher volumne of data ~80mil data points
+Dallas-Tarrant has ~40 million

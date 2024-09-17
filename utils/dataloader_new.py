@@ -186,6 +186,7 @@ class sp_loc_dataset(torch.utils.data.Dataset):
         if Path(self.save_path).is_file():
             with h5py.File(self.save_path, "r") as hdf:
                 self.len = hdf[f"{self.data_type}/X"].shape[0]  # Length of the dataset
+                print(f"Dataset length ({data_type}): {self.len}")
         else:
             print("Please generate preprocessed data using script (preprocess_h5_data.py) and shuffle it.")
             exit()

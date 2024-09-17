@@ -36,12 +36,35 @@ misc:
   # total_loc_num: 37170
   # # 0 reserved for padding
   # total_user_num: 2221
+
+  # # DallasMetro
+  # # Max sequence length: 2610
+  # # Number of unique users: 665779
+  # # Number of unique locations: 137341
+  # dataset: 'DallasMetro'
+  # # # 0 reserved for padding, 1 reserved for unknown
+  # total_loc_num: 137345
+  # # # 0 reserved for padding
+  # total_user_num: 665785
+  
+  #DallasTarrant
+  # Max sequence length: 2606
+  # Number of unique users: 361817
+  # Number of unique locations: 91300
+  # Number of unique modes: 1
+  # Total rows: 39210122
+  dataset: 'DallasTarrant'
+  # 0 reserved for padding, 1 reserved for unknown
+  total_loc_num: 91305
+  # 0 reserved for padding
+  total_user_num: 361820
+
   # 
   if_embed_loc: True
-  if_embed_user: True
+  if_embed_user: False
 
   if_embed_time: True
-  if_embed_mode: True
+  if_embed_mode: False
   # 
   if_embed_next_mode: False
   # loss
@@ -57,24 +80,28 @@ misc:
 
 embedding:
   # also size for time and mode
-  base_emb_size: 64
+  # base_emb_size: 64
+  base_emb_size: 256
   # user_embedding added at the end 
-  user_emb_size: 16
+  # user_emb_size: 16
+  user_emb_size: 1
   
 
 model:
   networkName: transformer
   # tuned 
-  num_encoder_layers: 4
+  # num_encoder_layers: 4
+  num_encoder_layers: 8
   nhead: 8
-  dim_feedforward: 512
+  # dim_feedforward: 512
+  dim_feedforward: 1024
   dropout: 0.1
   fc_dropout: 0.1
 
 optimiser:
   optimizer: Adam
   max_epoch: 100
-  lr: 0.001
+  lr: 0.0001
   weight_decay: 0.000001
   # for Adam
   beta1: 0.9
