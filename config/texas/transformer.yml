@@ -18,24 +18,27 @@ misc:
   # total_loc_num: 10000
   # # 0 reserved for padding
   # total_user_num: 530
-  # #El Paso
-  dataset: 'El Paso County'
-  # 0 reserved for padding, 1 reserved for unknown
-  total_loc_num: 100000
-  # 0 reserved for padding
-  total_user_num: 44000
-  #Harrison
+  
+  # # #El Paso
+  # dataset: 'El Paso County'
+  # # 0 reserved for padding, 1 reserved for unknown
+  # total_loc_num: 100000
+  # # 0 reserved for padding
+  # total_user_num: 44000
+  
+  # #Harrison
   # dataset: 'Harrison County'
   # # 0 reserved for padding, 1 reserved for unknown
   # total_loc_num: 65400
   # # 0 reserved for padding
   # total_user_num: 8430
-  # #Eastland
-  # dataset: 'Eastland County'
-  # # 0 reserved for padding, 1 reserved for unknown
-  # total_loc_num: 37170
-  # # 0 reserved for padding
-  # total_user_num: 2221
+
+  #Eastland
+  dataset: 'Eastland County'
+  # 0 reserved for padding, 1 reserved for unknown
+  total_loc_num: 37170
+  # 0 reserved for padding
+  total_user_num: 2221
 
   # # DallasMetro
   # # Max sequence length: 2610
@@ -47,17 +50,17 @@ misc:
   # # # 0 reserved for padding
   # total_user_num: 665785
   
-  #DallasTarrant
-  # Max sequence length: 2606
-  # Number of unique users: 361817
-  # Number of unique locations: 91300
-  # Number of unique modes: 1
-  # Total rows: 39210122
-  dataset: 'DallasTarrant'
-  # 0 reserved for padding, 1 reserved for unknown
-  total_loc_num: 91305
-  # 0 reserved for padding
-  total_user_num: 361820
+  # #DallasTarrant
+  # # Max sequence length: 2606
+  # # Number of unique users: 361817
+  # # Number of unique locations: 91300
+  # # Number of unique modes: 1
+  # # Total rows: 39210122
+  # dataset: 'DallasTarrant'
+  # # 0 reserved for padding, 1 reserved for unknown
+  # total_loc_num: 91305
+  # # 0 reserved for padding
+  # total_user_num: 361820
 
   # 
   if_embed_loc: True
@@ -80,11 +83,11 @@ misc:
 
 embedding:
   # also size for time and mode
-  # base_emb_size: 64
-  base_emb_size: 256
+  base_emb_size: 64
+  # base_emb_size: 256
   # user_embedding added at the end 
   # user_emb_size: 16
-  user_emb_size: 1
+  user_emb_size: 16
   
 
 model:

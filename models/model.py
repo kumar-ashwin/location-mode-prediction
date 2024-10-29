@@ -117,6 +117,9 @@ class TransEncoder(nn.Module):
 
     def forward(self, src, context_dict, device, next_mode=None) -> Tensor:
         emb = self.Embedding(src, context_dict)
+        print("src:", src)
+        print("context_dict:", context_dict)
+        exit()
         # Embedding layer output check
         if torch.isnan(emb).any():
             print("NaN detected after Embedding")

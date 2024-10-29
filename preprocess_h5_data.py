@@ -583,9 +583,9 @@ if __name__ == "__main__":
     previous_days = 7
     source_root = "./data"
     dataset_name = "Eastland County"
-    dataset_name = "El Paso County"
-    dataset_name = "DallasMetro"
-    dataset_name = "DallasTarrant"
+    # dataset_name = "El Paso County"
+    # dataset_name = "DallasMetro"
+    # dataset_name = "DallasTarrant"
     output_path = f"./data/temp/{dataset_name}_transformer_{previous_days}_preprocessed.h5"
     #Check if the file exists
     if os.path.exists(output_path):

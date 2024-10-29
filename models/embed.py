@@ -118,3 +118,58 @@ class AllEmbedding(nn.Module):
             return self.pos_encoder(emb * math.sqrt(self.d_input))
         else:
             return self.dropout(emb)
+
+
+class AllEmbeddingGeoTron(nn.Module):
+    def __init__(self, d_input, config, if_pos_encoder=True, emb_info="all", emb_type="add") -> None:
+        super(AllEmbeddingGeoTron, self).__init__()
+        # emberdding layers
+        self.d_input = d_input
+        self.emb_type = emb_type
+
+        # location embedding
+        self.location_mode = "onehot" #tiered, latlon, + type
+        if self.location_mode == "onehot":
+            self.emb_loc = nn.Embedding(config.total_loc_num, d_input)
+        elif self.location_mode == "tiered":
+            print("Tiered embedding not implemented yet")
+            exit()
+            self.emb_loc = nn.Embedding(config.total_loc_num, d_input)
+        elif self.location_mode == "latlon":
+            # Embed 2 values for lat and lon
+            latlon_dim = 2
+            self.emb_loc = nn.Linear(latlon_dim, d_input)
+        else:
+            raise ValueError("Invalid location mode")
+
+        # time is in minutes, possible time for each day is 60 * 24 // 30
+        self.if_include_time = config.if_embed_time
+        if self.if_include_time:
+            self.temporal_embedding = TemporalEmbedding(d_input, emb_info)
+            
+        self.if_pos_encoder = if_pos_encoder
+        if self.if_pos_encoder:
+            self.pos_encoder = PositionalEncoding(d_input, dropout=0.1)
+        else:
+            self.dropout = nn.Dropout(0.1)
+
+    def get_modeEmbedding(self):
+        return self.emb_mode
+
+    def forward(self, src, context_dict) -> Tensor:
+        
+        if self.location_mode == "onehot":
+            emb = self.emb_loc(src)
+        elif self.location_mode == "latlon":
+            latlon = context_dict["latlon"]
+            emb = self.emb_loc(latlon)
+        else:
+            raise ValueError("Invalid location mode")
+        
+        if self.if_include_time:
+            emb = emb + self.temporal_embedding(context_dict["time"], context_dict["weekday"])
+
+        if self.if_pos_encoder:
+            return self.pos_encoder(emb * math.sqrt(self.d_input))
+        else:
+            return self.dropout(emb)
