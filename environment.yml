@@ -14,3 +14,4 @@ dependencies:
   - transformers=4.16.2
   - cudatoolkit=11.3
   - numpy=1.26.4
+  - datasets

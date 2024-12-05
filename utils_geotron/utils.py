@@ -4,18 +4,12 @@ import random, torch, os
 import numpy as np
 import pandas as pd
 
-from utils.train import trainNet, test, get_performance_dict
+from utils_geotron.train import trainNet, test, get_performance_dict
 
-# from utils.train_mobTcast import trainNet_tcast, test_tcast
-from utils.train_mode import trainNet_mode, test_mode
-from utils.dataloader_new import sp_loc_dataset, collate_fn, deepmove_collate_fn
+from utils_geotron.dataloader_new import geotron_dataset, collate_fn
 
-from models.model import TransEncoder
-from models.model_mode import TransEncoderMode
+from models.model_geotron import TransEncoder, SimpleEncoder, LSTMEncoder
 from models.RNNs import RNNs
-
-# from models.Deepmove import Deepmove
-# from models.mobtcast import Mobtcast
 
 
 def load_config(path):
@@ -47,11 +41,6 @@ def setup_seed(seed):
 
 def get_trainedNets(config, model, train_loader, val_loader, device, log_dir):
 
-    # if config.networkName == "mobtcast":
-    #     best_model, performance = trainNet_tcast(config, model, train_loader, val_loader, device, log_dir=log_dir)
-    # elif config.networkName == "transformer_mode":
-    #     best_model, performance = trainNet_mode(config, model, train_loader, val_loader, device, log_dir=log_dir)
-    # else:
     best_model, performance = trainNet(config, model, train_loader, val_loader, device, log_dir=log_dir)
     performance["type"] = "vali"
 
@@ -59,17 +48,12 @@ def get_trainedNets(config, model, train_loader, val_loader, device, log_dir):
 
 
 def get_test_result(config, best_model, test_loader, device):
-    # if config.networkName == "mobtcast":
-    #     return_dict, user_mode_dict = test_tcast(config, best_model, test_loader, device)
-    # elif config.networkName == "transformer_mode":
-    #     return_dict, user_mode_dict = test_mode(config, best_model, test_loader, device)
-    # else:
-    return_dict, user_mode_dict = test(config, best_model, test_loader, device)
+    return_dict, user_cluster_dict = test(config, best_model, test_loader, device)
     performance = get_performance_dict(return_dict)
     performance["type"] = "test"
 
     user_mode_ls = []
-    for user_id, mode_dict in user_mode_dict.items():
+    for user_id, mode_dict in user_cluster_dict.items():
         for mode_id, perf in mode_dict.items():
             # ids and the count of records
             user_mode_ls.append(np.append(perf, np.array([user_id, mode_id])))
@@ -85,15 +69,10 @@ def get_models(config, device):
 
     if config.networkName == "transformer":
         model = TransEncoder(config=config).to(device)
-    # elif config.networkName == "deepmove":
-    #     model = Deepmove(config=config).to(device)
-    elif config.networkName == "rnn":
-        model = RNNs(config=config).to(device)
-    # elif config.networkName == "mobtcast":
-    #     model = Mobtcast(config=config).to(device)
-    elif config.networkName == "transformer_mode":
-        model = TransEncoderMode(config=config).to(device)
-
+    elif config.networkName == "mlp":
+        model = SimpleEncoder(config=config).to(device)
+    elif config.networkName == "lstm":
+        model = LSTMEncoder(config=config).to(device)
     else:
         raise ValueError("Invalid network name")
     total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -106,7 +85,7 @@ def get_models(config, device):
 def get_dataloaders(config):
 
     kwds_train = {
-        "shuffle": False,
+        "shuffle": True,
         "num_workers": 0,
         "batch_size": config["batch_size"],
     }
@@ -121,32 +100,26 @@ def get_dataloaders(config):
         "batch_size": config["batch_size"],
     }
 
-    dataset_train = sp_loc_dataset(
+    dataset_train = geotron_dataset(
         config.source_root,
         data_type="train",
         model_type=config.networkName,
-        previous_day=config.previous_day,
         dataset=config.dataset,
     )
-    dataset_val = sp_loc_dataset(
+    dataset_val = geotron_dataset(
         config.source_root,
-        data_type="validation",
+        data_type="val",
         model_type=config.networkName,
-        previous_day=config.previous_day,
         dataset=config.dataset,
     )
-    dataset_test = sp_loc_dataset(
+    dataset_test = geotron_dataset(
         config.source_root,
         data_type="test",
         model_type=config.networkName,
-        previous_day=config.previous_day,
         dataset=config.dataset,
     )
 
-    if config.networkName == "deepmove":
-        fn = deepmove_collate_fn
-    else:
-        fn = collate_fn
+    fn = collate_fn
 
     train_loader = torch.utils.data.DataLoader(dataset_train, collate_fn=fn, **kwds_train)
     val_loader = torch.utils.data.DataLoader(dataset_val, collate_fn=fn, **kwds_val)

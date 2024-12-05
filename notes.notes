@@ -111,3 +111,319 @@ Training with El Paso, with much larger model
 
 Dallas metro has much higher volumne of data ~80mil data points
 Dallas-Tarrant has ~40 million
+
+
+Implementing new model:
+1. Need to implement the mode results dict as cluster dict at some point
+2. Think about embedding time to next location
+3. Using user embedding based on home latlon 
+
+Structure:
+Input: [X, start_min_X, weekday_X, cluster_X, intra_cluster_id_X, user, homelat, homelon, time_to_next]
+Output possibilities: [poi_Y, cluster_Y, intra_cluster_id_Y]
+
+Decisions to make:
+1. Time to next location can be timedelta, or time of day. One may be better than the other. Think
+2. How to use cluster_id and intra_cluster_id together for output? Alone, cluster is fine, but together, the predicion probelm becomes harder.
+3. Think about whether home latlon needs normalization
+4. Think of a tiered network where the cluster is fed to intra-cluster output layer. How would training be done?
+
+-----------------
+Eastland Training
+-----------------
+
+Type 1: Location based. (Only use location ID)
+1. (start at 11:10)
+    ~1.2M params
+    With user embedding based on home loc and time to next embedding
+    Hyperparams:
+        bathc==ch size 128
+        emb_size 64
+        enc_layers 8
+        nhead 8
+        dim_feedforward 1024
+        lr 1e-4
+    Around 2 epochs, acc@20~5.62%
+    Got better accuracy at 20 in 5 epochs ~ 11%
+    Val accuracy at 10 epoachs: 15.5%
+    39 epochs. Failed at testing
+    Total time 79 mins
+2. Start at 12:34
+    900k params only
+    With user embedding based on home loc and time to next embedding
+    Hyperparams:
+        batch size 1024
+        emb_size 128
+        enc_layers 4
+        nhead 8
+        dim_feedforward 512
+        lr 1e-3
+    Around 3 epochs, acc@20~12%
+    Much faster, 1 epoch in ~30 seconds
+    5 epochs, acc@20~15%
+    15 epochs: >16%. The changes seem to be helping, maybe LR?
+    Training acc@20 is around 30%, so I guess it is learning to overfit as well?
+    Test acc 13.4%
+    Total time 9.21 mins
+
+Type 2: Cluster based. (Use cluster ID and intra cluster ID input embeds)
+1. Start at 11:30
+    1.2M params
+    With user embedding based on home loc and time to next embedding
+    Hyperparams:
+        batch size 1024
+        emb_size 128
+        enc_layers 4
+        nhead 8
+        dim_feedforward 512
+        lr 1e-3
+    Stopped in 16 epochs. Val acc@20~15.5%, train acc~25%
+    Total time 8.5 mins
+2. Start at 12:45
+    Same, but lower initial lr 1e-4
+    Just takes more epochs
+    Stopped at 61 epochs
+    TOtal time 33 mins
+    Test acc@20~13%
+" NO BENEFIT TO REDUCING LR. Sticking to 1e-3"
+" NO PERFORMANCE DIFFERENCE BETWEEN USING RAW LOC AS EMBEDDING VS CLUSTER/INTRACLUSTER IDS"
+
+-----------------
+Threshold for improvement with cluster/intracluster ids
+-----------------
+Goal: Identify if there is a benefit to using cluster/intracluster ids as input embeddings
+Hyperparams:
+    batch size 1024
+    emb_size 128
+    enc_layers 4
+    nhead 8
+    dim_feedforward 512
+    lr 1e-3
+Harrison County: num pois = 1300:
+Model sizes:
+1. With location ID only
+    1.2 M params
+2. With cluster/intracluster ID as input embeds (use_clusters True)
+    1.31 M params
+3. With cluster/intracluster ID as input and output
+    1.41 M params
+El Paso County: num pois = 11800:
+Model sizes:
+1. With location ID only
+    4.05 M params
+2. With cluster/intracluster ID as input embeds (use_clusters True)
+    2.83 M params
+3. With cluster/intracluster ID as input and output (predict clusters and predict intracluster)
+    1.41 M params
+
+" Benefits are visisble as soon as #pois> #clusters + #intraclusters"
+" Main benefit is that the model size for entire texas will be 1.41 M params, as there is no scaling with number of pois"
+" --Caveat: If considering the intracluster id to be conditioned on the cluster, the benefit may appear later."
+
+-----------------
+Harrison Training
+-----------------
+
+Type 1: Location based. (Only use location ID)
+1. 1.2 M params
+    Failed with Nan after epoch 3
+    Takes 30-40 mins to get there
+
+Type 2: Cluster based. (Use cluster ID and intra cluster ID input embeds)
+1. 1.31 M params
+    Failed with Nan during epoch 3
+    Takes 30-40 mins to get there
+
+In both cases, managed to hit ~13% acc@20. 
+
+Issue is in the loss calculation. Testing.
+    
+2. Started at 14:37
+    Added some checks to see where the nan is coming from
+    Still fails without triggering any checks
+
+3. Trying again with gradient checks and user norm
+    Started at 16:32
+    Seems to be working better. Hit epoch 4 around 16:50
+    Happened again. There is a nan in logits. 
+    if torch.isnan(logits_loc).any() or torch.isinf(logits_loc).any():
+        raise ValueError("Logits contain NaN or Inf.")
+    Essentially, all logits become Nans. So again the same problem as earlier.
+
+4. Trying with reduced LR (1e-4)
+    Started at 17:42
+    Still happens at epoch 4.
+    Loss value: 6.5895819664001465
+        Largest values: torch.return_types.topk(
+        values=tensor([[2.2205, 1.8842, 1.7425,  ..., 1.6537, 1.6503, 1.6264],
+                [1.9282, 1.8379, 1.8033,  ..., 1.5859, 1.4761, 1.4713],
+                [2.1471, 1.9998, 1.9845,  ..., 1.6970, 1.6903, 1.6895],
+                ...,
+                [1.3840, 1.3534, 1.3250,  ..., 1.1955, 1.1770, 1.1323],
+                [6.4891, 6.3816, 6.3551,  ..., 6.2053, 6.1475, 6.0898],
+                [1.2057, 1.0088, 0.9772,  ..., 0.8268, 0.8213, 0.7783]],
+            device='cuda:0', grad_fn=<TopkBackward0>),
+        indices=tensor([[ 288,   55,  210,  ...,  756, 1002, 1336],
+                [ 871,   13, 1116,  ...,  343,  405,  685],
+                [ 343, 1213,  764,  ..., 1116,  240, 1305],
+                ...,
+                [ 856,  343,  787,  ...,  871, 1089,  240],
+                [1048,  288,  545,  ...,   55,  210, 1188],
+                [  32, 1230,  123,  ..., 1123,  447,  799]], device='cuda:0'))
+        RuntimeError: Function 'NativeLayerNormBackward0' returned nan values in its 0th output.
+
+5. Trying with no warm up
+    Started at 22:23
+    This didnt fail at 2 epochs, so warmup is not causing this
+    Failed again at epoch 4
+
+6. Trying running on cpu
+    May be able to try a very large batch size
+    Too slow.. abandoning
+
+7. Batch size 512
+    Hit at epoch 1! Got Nans in logits
+    Next retry failed at epoch 3
+
+8. Trying with blocking cuda async
+    Started at 14:56
+    1024 batch size
+    LR 0.001
+    Got to epoch 14, acc@20 14.10
+
+9. Trying with only 2 encoder layers, 1024 dim
+
+-----------------
+El Paso Training
+-----------------
+
+Type 1: Location based. (Only use location ID)
+
+Type 2: Cluster based. (Use cluster ID and intra cluster ID input embeds)
+With 512 batch size
+1. 2.1 M params
+    Started at 00:24
+    Didnt even get past 1 epoch. Nans in logits, even with lr 1e-4
+    Trying again with nhead 4
+2. Trying with the safe model
+    Started at 18:31
+    Batch size 512
+
+-----------------------
+Trying a simple encoder model which is not a transformer:
+
+Trained eastland in 10 mins, test acc@20 = 12.99%
+
+Trying el paso
+2 M params
+It did train in 502 mins, but the acc@20 was 5.07%. Even the training acc@20 was just 8.59%
+
+-----------------------
+Trying an LSTM model:
+Hidden dim = base_emb_size (128)
+
+600k params for eastland
+    Starts to overfit really quickly. Val acc drops from 9% to 2% by epoch 5. Then early stopping kicks in thankfully
+    Finished in 18 mins (40 epochs)
+    Test acc@20 = 13.54%
+    Getting more details
+    Test:
+    acc@1 0.58 acc@5 = 3.06 acc@10 = 6.29 acc@20 = 12.15
+
+Trying Harrison
+    780k params
+    Takes 2mins per epoch
+    Also immediately starts overfitting. Maybe lr is too high
+    Max accuracy isnt all that good, ~11% val top20
+    Took 100 epochs
+    Test acc@20 10.06%
+
+Trying el paso
+    2.3 M params
+    In about 10 epochs, loss = 7.56, val acc@20 = 11.75
+    Manually stopped
+
+    4096 batch size, 3 lstm layers
+    2.4 M params
+    Epoch 31, val acc@20~12%
+     !An illegal memory access was encountered.
+     So it happens even here, may not be just a transformer issue
+
+
+Trying with predicting clusters only
+
+----LSTM----
+Eastland:
+    870k params
+    4 clusters
+    Val Acc@1 hits 76% in 5 epochs (BS 4096)
+    6 mins. Test acc@1 = 74.4%, acc@5 = 87.79 acc@10 = 87.95 acc@20 = 88.12
+    Does not approach 100% for some reason. It should be easy to.
+
+Harrison:
+    Also 870k params (by structure)
+    8 clusters.
+    Val Acc@1 hits 77% in first epoch.
+    in 5 epochs, val acc@1 = 85.19%, acc@20=98.5%
+    Took 30 mins
+    Test acc@1 = 86.38%, acc@5 = 98.53 acc@10 = 99.22 acc@20 = 99.23
+
+El Paso:
+    17 clusters
+    870k params (3 layers, as used in previous 2)
+    in~20 epochs., val acc@1 ~45%, acc@20=100%
+    750 mins
+    Test acc@1 = 45.5%, acc@5 = 84.38 acc@10 = 96.07 acc@20 = 100.00
+
+
+Tiered model, with cluster id being fed to intra_cluster fc layer:
+2.07 M params
+Eastland
+    Let's see if this is more accurate than the previous model
+    acc@1 = 0.63 acc@5 = 3.31 acc@10 = 6.63 acc@20 = 12.87
+    Similar. Test Acc@20~12.8%.. 10 mins
+
+Harrison
+    Took 48 mins.
+    Acc@20 = 8.65%, which is worse than the previous model
+    acc@1 = 0.40 acc@5 = 2.13 acc@10 = 4.44 acc@20 = 8.65
+
+El Paso
+    Took 1357 mins
+    Acc@1 1.19% acc@5 = 3.94 acc@10 = 6.47 acc@20 = 10.22
+    Slightly worse than previous
+
+Naive tiered prediction:
+Eastland
+    10 mins
+    acc@1 = 0.63 acc@5 = 3.34 acc@10 = 6.68 acc@20 = 12.96
+Harrison
+    49 mins 
+    acc@1 0.40 acc@5 = 2.12 acc@10 = 4.44 acc@20 = 8.65
+El Paso
+    Failed with illegal memory access
+    Val accs:
+    acc@1 0.83 acc@5 = 3.13 acc@10 = 5.15 acc@20 = 8.18
+
+Adding hidden dim using dim_feedforward:
+Changed LSTM layers to 2
+Predicting pois
+Harrison:
+With 1024:
+    22 M params
+With 512:
+    4.7 Mil
+    Ran into illegal instruction was encountered?? (Epoch 5)
+Trying without time embed
+With 512:
+    Lower accuracy in val (~10 vs ~12 earlier). Getting higher though. Got to 11.7 by epoch 34
+    Just randomly died??? No error, jsut stopped during training
+    retrying:
+    Stops at epoch 17
+    Test acc@1 = 0.71 acc@5 = 3.17 acc@10 = 5.81 acc@20 = 10.55
+With intra-clusters being predicted, using time embed:
+    Needed to reduce bs to 1024
+
+
+TODO: Train the tiered embedding separately.
+Idea: Positional embed the raw poi embeds based on latlon?
