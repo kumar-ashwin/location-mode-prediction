@@ -4,9 +4,9 @@ import random, torch, os
 import numpy as np
 import pandas as pd
 
-from utils_geotron.train import trainNet, test, get_performance_dict
+from utils_geotron.train import trainNet, test, get_performance_dict, evalNet
 
-from utils_geotron.dataloader_new import geotron_dataset, collate_fn
+from utils_geotron.dataloader_new import geotron_dataset, collate_fn, geotron_eval_dataset, collate_fn_eval
 
 from models.model_geotron import TransEncoder, SimpleEncoder, LSTMEncoder
 from models.RNNs import RNNs
@@ -59,10 +59,12 @@ def get_test_result(config, best_model, test_loader, device):
             user_mode_ls.append(np.append(perf, np.array([user_id, mode_id])))
 
     result_df = pd.DataFrame(user_mode_ls)
-    result_df.columns = ["correct@1", "correct@3", "correct@5", "correct@10", "f1", "rr", "total", "user_id", "mode_id"]
+    result_df.columns = ["correct@1", "correct@20", "correct@5", "correct@10", "f1", "rr", "total", "user_id", "mode_id"]
 
     return performance, result_df
 
+def get_eval_result(config, best_model, eval_loader, device):
+    return evalNet(config, best_model, eval_loader, device)
 
 def get_models(config, device):
     total_params = 0
@@ -127,3 +129,22 @@ def get_dataloaders(config):
 
     # print(len(train_loader), len(val_loader), len(test_loader))
     return train_loader, val_loader, test_loader
+
+def get_eval_dataloader(config):
+    kwds = {
+        "shuffle": False,
+        "num_workers": 0,
+        "batch_size": config["batch_size"],
+    }
+
+    dataset = geotron_eval_dataset(
+        config.source_root,
+        dataset=config.dataset,
+        # max_seq_len=config.max_seq_len_eval,
+    )
+
+    fn = collate_fn_eval
+
+    eval_loader = torch.utils.data.DataLoader(dataset, collate_fn=fn, **kwds)
+
+    return eval_loader

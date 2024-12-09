@@ -14,6 +14,8 @@ from utils_geotron.utils import (
     get_test_result,
     get_dataloaders,
     get_models,
+    get_eval_result,
+    get_eval_dataloader,
 )
 
 setup_seed(42)
@@ -24,6 +26,7 @@ def single_run(config, device, log_dir):
 
     # get data
     train_loader, val_loader, test_loader = get_dataloaders(config)
+    eval_loader = get_eval_dataloader(config)
 
     # get modelp
     model = get_models(config, device)
@@ -35,6 +38,10 @@ def single_run(config, device, log_dir):
     # test
     perf, test_df = get_test_result(config, model, test_loader, device)
     test_df.to_csv(os.path.join(log_dir, "user_mode_detail.csv"))
+
+    # eval
+    eval_results_df = get_eval_result(config, model, eval_loader, device)
+    eval_results_df.to_csv(os.path.join(log_dir, "eval_results.csv"))
 
     result_ls.append(perf)
 

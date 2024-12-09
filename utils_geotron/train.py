@@ -677,3 +677,151 @@ def test(config, model, data_loader, device):
         },
         result_dict
     )
+
+
+############################################
+# Functions for evaluation
+############################################
+
+def send_to_device_eval(inputs, device, config):
+    x, x_dict, y1w_dict, y2w_dict, y1m_dict = inputs
+    x = x.to(device)
+    for key in x_dict:
+        x_dict[key] = x_dict[key].to(device)
+    # y1w_dict["poi_Y"] = y1w_dict["poi_Y"].to(device)
+    # y2w_dict["poi_Y"] = y2w_dict["poi_Y"].to(device)
+    # y1m_dict["poi_Y"] = y1m_dict["poi_Y"].to(device)
+
+    return x, x_dict, y1w_dict, y2w_dict, y1m_dict
+
+
+def calculate_correct_predictions_from_set(logits, y_sets):
+    # See if any of the topk predictions are in the sets
+    results = []
+    for k in [1, 5, 10, 20]:
+        if logits.shape[-1] < k:
+            prediction = torch.topk(logits, k=logits.shape[-1], dim=-1).indices
+        else:
+            prediction = torch.topk(logits, k=k, dim=-1).indices
+        
+        # Check if any of the top-k predictions are in the sets
+        correct = 0
+        for pred, y_set in zip(prediction, y_sets):
+            if any(p.item() in y_set for p in pred):
+                correct += 1
+        
+        results.append(correct)
+    # Total samples
+    results.append(len(y_sets))
+    return np.array(results)
+
+def calculate_correct_predictions_from_set_tiered(logits_cluster, y_cluster_sets, logits_icid, y_icid_sets):
+    """
+    Calculate correct predictions based on top-k combinations of cluster and intra-cluster IDs,
+    optimized to only consider the Cartesian product of top-k clusters and top-k ICIDs.
+
+    Args:
+        logits_cluster (torch.Tensor): Cluster logits of shape (batch_size, num_clusters).
+        y_cluster_sets (list of sets): A list of sets, each containing valid cluster IDs for the batch.
+        logits_icid (torch.Tensor): Intra-cluster ID logits of shape (batch_size, num_icids).
+        y_icid_sets (list of sets): A list of sets, each containing valid intra-cluster IDs for the batch.
+
+    Returns:
+        np.ndarray: Array of correct predictions for each k (1, 5, 10, 20) and total samples.
+    """
+    results = []
+    batch_size = logits_cluster.shape[0]
+
+    for k in [1, 5, 10, 20]:
+        correct = 0
+
+        for b in range(batch_size):
+            cluster_set = y_cluster_sets[b]
+            icid_set = y_icid_sets[b]
+
+            # Get top-k clusters and intra-cluster IDs
+            cid_probs, top_cids = torch.topk(logits_cluster[b], k=min(k, logits_cluster.shape[-1]))
+            icid_probs, top_icids = torch.topk(logits_icid[b], k=min(k, logits_icid.shape[-1]))
+
+            # Compute joint probabilities for top-k pairs
+            joint_probs = cid_probs.unsqueeze(1) * icid_probs.unsqueeze(0)
+            top_joint_indices = torch.topk(joint_probs.flatten(), k=min(k, joint_probs.numel())).indices
+
+            # Convert flat indices to Cartesian pairs
+            # cid_indices = top_joint_indices // joint_probs.shape[1]
+            cid_indices = torch.div(top_joint_indices, joint_probs.shape[1], rounding_mode='floor')
+            icid_indices = top_joint_indices % joint_probs.shape[1]
+
+            # Check if any top-k (CID, ICID) combination is correct
+            if any(
+                (top_cids[cid_idx].item() in cluster_set and top_icids[icid_idx].item() in icid_set)
+                for cid_idx, icid_idx in zip(cid_indices, icid_indices)
+            ):
+                correct += 1
+
+        results.append(correct)
+
+    # Total samples
+    results.append(batch_size)
+    return np.array(results)
+
+    
+
+def evalNet(config, model, data_loader, device):
+    """
+    Evaluate the model accuracy evaluated on train sequences over 1w/2w/1m lookaheads
+    If any prediction in the top-k is present in the lookahead list, it is considered correct.
+    """
+    # overall accuracy
+    results_dict = {}
+    results_dict["1w"] = np.array([0, 0, 0, 0, 0], dtype=np.float32)
+    results_dict["2w"] = np.array([0, 0, 0, 0, 0], dtype=np.float32)
+    results_dict["1m"] = np.array([0, 0, 0, 0, 0], dtype=np.float32)
+
+    # change to validation mode
+    model.eval()
+    with torch.no_grad():
+
+        for inputs in data_loader:
+            x, x_dict, y1w_dict, y2w_dict, y1m_dict = send_to_device_eval(inputs, device, config)
+
+            # print(x_dict)
+            prediction = model(x, x_dict, device)   
+            ydicts = {
+                "1w": y1w_dict,
+                "2w": y2w_dict,
+                "1m": y1m_dict
+            }
+            
+            for lookahead, y_dict in ydicts.items():
+                y = y_dict["poi_Y"]
+                y_cluster = y_dict["cluster_Y"]
+                y_icid = y_dict["intra_cluster_id_Y"]
+                if config.predict_clusters:
+                    if config.predict_intra_cluster:
+                        logits_cluster, logits_icid = prediction
+                        results_dict[lookahead] += calculate_correct_predictions_from_set_tiered(logits_cluster, y_cluster, logits_icid, y_icid)
+                    else:
+                        logits_cluster = prediction
+                        results_dict[lookahead] += calculate_correct_predictions_from_set(logits_cluster, y_cluster)
+                else:
+                    logits_loc = prediction
+                    results_dict[lookahead] += calculate_correct_predictions_from_set(logits_loc, y)
+
+    results_df = pd.DataFrame()
+    for lookahead in ["1w", "2w", "1m"]:
+        row = {}
+        row["lookahead"] = lookahead
+        row["acc@1"] = 100 * results_dict[lookahead][0] / results_dict[lookahead][-1]
+        row["acc@5"] = 100 * results_dict[lookahead][1] / results_dict[lookahead][-1]
+        row["acc@10"] = 100 * results_dict[lookahead][2] / results_dict[lookahead][-1]
+        row["acc@20"] = 100 * results_dict[lookahead][3] / results_dict[lookahead][-1]
+        row_df = pd.DataFrame([row])
+        results_df = pd.concat([results_df, row_df], ignore_index=True)
+
+
+    if config.verbose:
+        print("Eval results:")
+        print(results_df)
+
+    return results_df
