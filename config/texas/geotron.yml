@@ -1,22 +1,22 @@
 misc:
-  #ElPaso
-  dataset: 'El_Paso'
-  # 0 reserved for padding, 1 reserved for unknown 
-  total_loc_num: 11796
-  # 0 reserved for padding
-  total_user_num: 42692
+  # #ElPaso
+  # dataset: 'El_Paso'
+  # # 0 reserved for padding, 1 reserved for unknown 
+  # total_loc_num: 11796
+  # # 0 reserved for padding
+  # total_user_num: 42692
   
   # #Harrison
   # dataset: 'Harrison'
   # total_loc_num: 1369
   # total_user_num: 69050
 
-  # #Eastland
-  # dataset: 'Eastland'
-  # # 0 reserved for padding, 1 reserved for unknown
-  # total_loc_num: 525
-  # # 0 reserved for padding
-  # total_user_num: 1922
+  #Eastland
+  dataset: 'Eastland'
+  # 0 reserved for padding, 1 reserved for unknown
+  total_loc_num: 525
+  # 0 reserved for padding
+  total_user_num: 1922
 
   total_cluster_num: 1060
   max_intra_cluster_num: 1000

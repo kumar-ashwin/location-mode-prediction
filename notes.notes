@@ -516,6 +516,15 @@ With patience 3, bs 1024, dim_feedforward 512:
 !Transformer:
 Added max_seq_length to dataloader. Trying with 100, see if transformer fails:
 BS 1024, dim_feedforward 512, max seq length 100
+Eastland:
+    Training finished.       Time: 16.99min.         acc@1: 0.77%
+    acc@1 = 0.64 f1 = 0.00 mrr = -0.10
+    acc@5 = 3.48 acc@10 = 6.75 acc@20 = 12.87
+    Eval results:
+    lookahead      acc@1      acc@5     acc@10     acc@20
+    0        1w   5.222136  18.550273  30.865160  47.934528
+    1        2w   7.716290  25.798909  42.400624  60.561185
+    2        1m  11.223694  35.229930  52.844895  71.551052
 Harrison:
     predicting tiered
     2.5M params
@@ -545,6 +554,15 @@ Trying El Paso:
     "Worse might be because of the limit on sequence length."
 
 Trying with 200 seq length:
+Eastland:
+    Training finished.       Time: 17.00min.         acc@1: 0.77%
+    acc@1 = 0.64 f1 = 0.00 mrr = -0.10
+    acc@5 = 3.48 acc@10 = 6.75 acc@20 = 12.87
+    Eval results:
+    lookahead      acc@1      acc@5     acc@10     acc@20
+    0        1w   5.222136  18.550273  30.865160  47.934528
+    1        2w   7.716290  25.798909  42.400624  60.561185
+    2        1m  11.223694  35.229930  52.844895  71.551052
 Harrison:
     Training finished.       Time: 83.18min.         acc@1: 0.85%
     acc@1 = 0.71 f1 = 0.00 mrr = -0.10
@@ -561,11 +579,14 @@ El Paso:
     Trying half the batch size. 512
     Same... Why?
     Trying with 100 max seq length, BS 1024. This worked earlier.
-        Seems to still work
+        This seems to still work
         Weird.
+
+
 
 Try Dallas with 100.
 
 TODO: Train the tiered embedding separately.
+! BIG TODO: Train without the 7 day previous window. 
 !BIG TODO: Test the evaluation accuracy functions, with some sample inputs. Make sure no bugs
 Idea: Positional embed the raw poi embeds based on latlon?
