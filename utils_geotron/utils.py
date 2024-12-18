@@ -39,9 +39,9 @@ def setup_seed(seed):
     torch.backends.cudnn.deterministic = True
 
 
-def get_trainedNets(config, model, train_loader, val_loader, device, log_dir):
+def get_trainedNets(config, model, train_loader, val_loader, eval_loader, device, log_dir):
 
-    best_model, performance = trainNet(config, model, train_loader, val_loader, device, log_dir=log_dir)
+    best_model, performance = trainNet(config, model, train_loader, val_loader, eval_loader, device, log_dir=log_dir)
     performance["type"] = "vali"
 
     return best_model, performance
@@ -107,18 +107,21 @@ def get_dataloaders(config):
         data_type="train",
         model_type=config.networkName,
         dataset=config.dataset,
+        max_seq_len=config.max_seq_length
     )
     dataset_val = geotron_dataset(
         config.source_root,
         data_type="val",
         model_type=config.networkName,
         dataset=config.dataset,
+        max_seq_len=config.max_seq_length
     )
     dataset_test = geotron_dataset(
         config.source_root,
         data_type="test",
         model_type=config.networkName,
         dataset=config.dataset,
+        max_seq_len=config.max_seq_length
     )
 
     fn = collate_fn
@@ -140,7 +143,7 @@ def get_eval_dataloader(config):
     dataset = geotron_eval_dataset(
         config.source_root,
         dataset=config.dataset,
-        # max_seq_len=config.max_seq_len_eval,
+        max_seq_len=config.max_seq_length,
     )
 
     fn = collate_fn_eval

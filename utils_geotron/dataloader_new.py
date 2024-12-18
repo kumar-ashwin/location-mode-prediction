@@ -133,7 +133,7 @@ class geotron_eval_dataset(torch.utils.data.Dataset):
         self,
         source_root,
         dataset='',
-        max_seq_len=200,
+        max_seq_len=100,
     ):
         self.root = source_root
         self.dataset = dataset

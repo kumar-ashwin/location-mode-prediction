@@ -32,7 +32,7 @@ def single_run(config, device, log_dir):
     model = get_models(config, device)
 
     # train
-    model, perf = get_trainedNets(config, model, train_loader, val_loader, device, log_dir)
+    model, perf = get_trainedNets(config, model, train_loader, val_loader, eval_loader, device, log_dir)
     result_ls.append(perf)
 
     # test
@@ -40,8 +40,9 @@ def single_run(config, device, log_dir):
     test_df.to_csv(os.path.join(log_dir, "user_mode_detail.csv"))
 
     # eval
-    eval_results_df = get_eval_result(config, model, eval_loader, device)
+    eval_results_df, per_user_results_df = get_eval_result(config, model, eval_loader, device)
     eval_results_df.to_csv(os.path.join(log_dir, "eval_results.csv"))
+    per_user_results_df.to_csv(os.path.join(log_dir, "per_user_results.csv"))
 
     result_ls.append(perf)
 

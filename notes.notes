@@ -582,11 +582,123 @@ El Paso:
         This seems to still work
         Weird.
 
+Lab PC Training:
+BS 4096, dim_feedforward 512, max seq length 100
+Eastland test:
+    100 max length. Also changed the max length of the eval. 
+    41 epochs
+    Training finished.       Time: 7.40min.  acc@1: 0.79%
+    acc@1 = 0.67 f1 = 0.00 mrr = -0.03
+    acc@5 = 3.03 acc@10 = 6.21 acc@20 = 12.26
+    Eval results:
+    lookahead     acc@1      acc@5     acc@10     acc@20
+    0        1w  4.364770  19.485581  35.307872  57.911146
+    1        2w  6.936867  27.669525  46.453624  70.459860
+    2        1m  9.508963  35.775526  59.314108  80.826189
+    Significantly better numbers here. Let's try Harrison.
+
+Harrison test:
+    Training finished.       Time: 58.02min.         acc@1: 0.60%
+    acc@1 = 0.45 f1 = 0.00 mrr = -0.03
+    acc@5 = 2.20 acc@10 = 4.40 acc@20 = 8.48
+    Eval results:
+    lookahead      acc@1      acc@5     acc@10     acc@20
+    0        1w   4.388646  17.751092  30.851528  47.860262
+    1        2w   6.899563  25.960699  43.209607  62.882096
+    2        1m  10.109170  34.847162  54.563319  73.995633
+
+El Paso test:
+    This should be better again
+    Started at 6:58pm, 11/12
+
+
+
+Eastland Unfiltered:
+Without removing pois outside the county
+    Training finished.       Time: 16.53min.         acc@1: 0.61%
+    acc@1 = 0.50 f1 = 0.00 mrr = -0.03
+    acc@5 = 2.28 acc@10 = 4.12 acc@20 = 7.38
+    Eval results:
+    lookahead      acc@1      acc@5     acc@10     acc@20
+    0        1w   4.491726  16.784870  28.999212  44.680851
+    1        2w   6.225374  24.271080  39.085894  55.870764
+    2        1m  10.323089  34.830575  50.039401  66.036249
+    "Takes longer, is less accurate"
+Harrison Unfiltered:
+    38 epochs
+    Training finished.       Time: 82.67min.         acc@1: 1.03%
+    acc@1 = 0.82 f1 = 0.00 mrr = -0.02
+    acc@5 = 3.00 acc@10 = 4.99 acc@20 = 8.08
+    Eval results:
+    lookahead      acc@1      acc@5     acc@10     acc@20
+    0        1w   4.709083  15.006279  24.926748  37.128506
+    1        2w   8.078694  22.938468  36.102972  51.151109
+    2        1m  11.825031  32.544998  47.321055  62.494768
+
+El Paso:
+    100 epochs (lab PC) Took about 21 hoours
+    acc@1 = 1.36 f1 = 0.00 mrr = -0.02
+    acc@5 = 4.61 acc@10 = 7.35 acc@20 = 11.15
+    Eval results:
+    lookahead      acc@1      acc@5     acc@10     acc@20
+    0        1w   4.255242  11.806746  17.845032  26.096627
+    1        2w   6.698268  17.742935  25.969006  36.510483
+    2        1m  10.362808  25.378304  35.646308  47.416591
+
+    Started training on the cluster with BS 12288. at 12/12/24, 3:26pm. Should be 3X as fast.
+        Check back in a bit to verify.
+        4:38 pm 5 epochs in 1 hour. Not really faster, then. Maybe the bottleneck is the data loading.
+        
+        Got some okay intermediate results:
+        Epoch 10, 98.8%  loss: 8.044 acc@1: 1.13 f1: 0.00 mrr: -0.01, took: 20.66s, acc@5: 4.34, acc@10: 7.01, acc@20: 11.13 
+        Validation loss = 8.22 acc@1 = 1.10 f1 = 0.00 mrr = -0.01
+        acc@5 = 3.96 acc@10 = 6.45 acc@20 = 10.09
+        Eval results:
+        lookahead      acc@1      acc@5     acc@10     acc@20
+        0        1w   4.153145  12.886053  19.952598  29.152233
+        1        2w   6.654512  19.522334  28.816773  40.386509
+        2        1m  10.187785  27.722881  39.226983  51.584321
+        
+        # seems to get worse when finishing. 
+        98 epochs
+        Training finished.       Time: 1442.24min.       acc@1: 1.43%
+        acc@1 = 1.26 f1 = 0.00 mrr = -0.01
+        acc@5 = 4.39 acc@10 = 7.02 acc@20 = 10.74
+        Eval results:
+        lookahead      acc@1      acc@5     acc@10     acc@20
+        0        1w   4.182315  11.810392  18.096627  26.348222
+        1        2w   6.778487  17.914312  26.329991  36.689152
+        2        1m  10.512306  25.786691  35.854148  47.460346
+        "Still took the entire day, not any faster"
+
+
+A 100 sequence length preprocessing:
+!Doing a 100 sequence length preprocessing instead of 7 days does weird things
+    Eastland: drops some users. Accuracy Top20 is now lower (54% instead of 71%)
+    ! This may be because of not dropping users with <3 data points in the 1m lookahead data
+    !!!TEST!!! - Seems to be correct
+
+    Harrison: 
+    This also drops in quality. Top20 is now 50% instead of 74%
+    Training finished.       Time: 60.90min.         acc@1: 1.14%
+    acc@1 = 0.97 f1 = 0.00 mrr = -0.02
+    acc@5 = 4.33 acc@10 = 7.78 acc@20 = 13.72
+    Eval results:
+    lookahead     acc@1      acc@5     acc@10     acc@20
+    0        1w  3.171475  12.721734  21.716538  33.596130
+    1        2w  4.945350  18.419638  30.012543  42.931374
+    2        1m  6.952159  24.690916  37.627665  50.707758
+
+    El Paso:
+
 
 
 Try Dallas with 100.
 
 TODO: Train the tiered embedding separately.
 ! BIG TODO: Train without the 7 day previous window. 
+    Generate these datasets.
+    !Convert to max_seq_length instead of previous_days
+! Pick a lane: Either dont filter from the dataset for the eval lookahead data, or do.
 !BIG TODO: Test the evaluation accuracy functions, with some sample inputs. Make sure no bugs
 Idea: Positional embed the raw poi embeds based on latlon?

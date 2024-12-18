@@ -1,24 +1,45 @@
 misc:
-  # #ElPaso
+  #ElPaso
   # dataset: 'El_Paso'
   # # 0 reserved for padding, 1 reserved for unknown 
   # total_loc_num: 11796
   # # 0 reserved for padding
   # total_user_num: 42692
   
-  # #Harrison
-  # dataset: 'Harrison'
-  # total_loc_num: 1369
-  # total_user_num: 69050
+  # # #ElPaso_unfiltered
+  # # Number of unique users: 59408
+  # # Number of unique pois: 90321
+  # dataset: 'El_Paso_unfiltered'
+  # total_loc_num: 90323
+  # total_user_num: 59409
+  
+  #Harrison
+  dataset: 'Harrison'
+  total_loc_num: 1369
+  total_user_num: 69050
 
-  #Eastland
-  dataset: 'Eastland'
-  # 0 reserved for padding, 1 reserved for unknown
-  total_loc_num: 525
-  # 0 reserved for padding
-  total_user_num: 1922
+  # # Harrison_unfiltered
+  # # Number of unique users: 8953
+  # # Number of unique pois: 58561
+  # dataset: 'Harrison_unfiltered'
+  # total_loc_num: 58563
+  # total_user_num: 8954
 
-  total_cluster_num: 1060
+  # #Eastland
+  # dataset: 'Eastland'
+  # # 0 reserved for padding, 1 reserved for unknown
+  # total_loc_num: 525
+  # # 0 reserved for padding
+  # total_user_num: 1922
+
+  # # Eastland_unfiltered
+  # # Number of unique users: 2527
+  # # Number of unique pois: 33053
+  # dataset: 'Eastland_unfiltered'
+  # total_loc_num: 33054
+  # total_user_num: 2528
+
+  total_cluster_num: 1061
   max_intra_cluster_num: 1000
 
   predict_clusters: True
@@ -34,8 +55,8 @@ misc:
   previous_day: 7
   verbose: True
   debug: False
-  batch_size: 1024
-  # batch_size: 4096
+  # batch_size: 1024
+  batch_size: 4096
   print_step: 5
   
 
@@ -61,6 +82,7 @@ model:
   # dim_feedforward: 1024
   dropout: 0.1
   fc_dropout: 0.1
+  max_seq_length: 100
 
 optimiser:
   optimizer: Adam

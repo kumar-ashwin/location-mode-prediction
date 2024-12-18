@@ -259,7 +259,7 @@ def get_optimizer(config, model):
     return optim
 
 
-def trainNet(config, model, train_loader, val_loader, device, log_dir):
+def trainNet(config, model, train_loader, val_loader, eval_loader, device, log_dir):
 
     performance = {}
 
@@ -303,6 +303,8 @@ def trainNet(config, model, train_loader, val_loader, device, log_dir):
 
         # At the end of the epoch, do a pass on the validation set
         return_dict = validate(config, model, val_loader, device)
+        if (epoch+1)%5==0:
+            _ = evalNet(config, model, eval_loader, device)
 
         # early_stopping needs the validation loss to check if it has decresed,
         # and if it has, it will make a checkpoint of the current model
@@ -412,42 +414,6 @@ def train(
                 print("Largest values:", torch.topk(logits_loc, 10))
                 #print smallest values
                 print("Smallest values:", torch.topk(logits_loc, 10, largest=False))
-
-                # Try with smaller batch size to narrow down the issue
-                print("Batch size:", x.shape[0])
-                x_temp = x.clone()
-                y_temp = y.clone()
-                x_dict_temp = {key: value.clone() for key, value in x_dict.items()}
-                while True:
-                    subbatchsize = x_temp.shape[0] // 8
-                    if subbatchsize < 1:
-                        # Print the data
-                        print("Data:")
-                        print("x:", x_temp)
-                        print("y:", y_temp)
-                        print("x_dict:", x_dict_temp)
-                    # iterate over the batch size
-                    for i in range(8):
-                        x_tempi = x_temp[i*subbatchsize:(i+1)*subbatchsize]
-                        y_tempi = y_temp[i*subbatchsize:(i+1)*subbatchsize]
-                        x_dict_tempi = {key: value[i*subbatchsize:(i+1)*subbatchsize] for key, value in x_dict_temp.items()}
-
-                        # try an update 
-                        optim.zero_grad()
-                        logits_loc = model(x_tempi, x_dict_tempi, device)
-                        loss_loc = CEL(logits_loc, y_tempi.reshape(-1))
-
-                        try:
-                            loss_loc.backward()
-                        except:
-                            print("Found a smaller batch size that causes the issue.")
-                            print("Batch size:", half_size)
-                            x_temp = x_tempi.clone()
-                            y_temp = y_tempi.clone()
-                            x_dict_temp = {key: value.clone() for key, value in x_dict_tempi.items()}
-                            break
-                    print("Unable to find a smaller batch size that causes the issue.")
-                    break
 
                 input("Press Enter to continue...")
 
@@ -698,22 +664,27 @@ def send_to_device_eval(inputs, device, config):
 def calculate_correct_predictions_from_set(logits, y_sets):
     # See if any of the topk predictions are in the sets
     results = []
+    per_user_results = {}
     for k in [1, 5, 10, 20]:
         if logits.shape[-1] < k:
             prediction = torch.topk(logits, k=logits.shape[-1], dim=-1).indices
         else:
             prediction = torch.topk(logits, k=k, dim=-1).indices
         
+        user_scores = np.zeros(len(y_sets))
         # Check if any of the top-k predictions are in the sets
         correct = 0
-        for pred, y_set in zip(prediction, y_sets):
+        # for pred, y_set in zip(prediction, y_sets):
+        for i, (pred, y_set) in enumerate(zip(prediction, y_sets)):
             if any(p.item() in y_set for p in pred):
                 correct += 1
+                user_scores[i] = 1
         
         results.append(correct)
+        per_user_results[k] = user_scores
     # Total samples
     results.append(len(y_sets))
-    return np.array(results)
+    return np.array(results), per_user_results
 
 def calculate_correct_predictions_from_set_tiered(logits_cluster, y_cluster_sets, logits_icid, y_icid_sets):
     """
@@ -730,11 +701,13 @@ def calculate_correct_predictions_from_set_tiered(logits_cluster, y_cluster_sets
         np.ndarray: Array of correct predictions for each k (1, 5, 10, 20) and total samples.
     """
     results = []
+    per_user_results = {}
     batch_size = logits_cluster.shape[0]
 
     for k in [1, 5, 10, 20]:
         correct = 0
 
+        user_scores = np.zeros((batch_size))
         for b in range(batch_size):
             cluster_set = y_cluster_sets[b]
             icid_set = y_icid_sets[b]
@@ -758,12 +731,16 @@ def calculate_correct_predictions_from_set_tiered(logits_cluster, y_cluster_sets
                 for cid_idx, icid_idx in zip(cid_indices, icid_indices)
             ):
                 correct += 1
+                user_scores[b] = 1
+                
 
         results.append(correct)
+        per_user_results[k] = user_scores
+
 
     # Total samples
     results.append(batch_size)
-    return np.array(results)
+    return np.array(results), per_user_results
 
     
 
@@ -778,6 +755,11 @@ def evalNet(config, model, data_loader, device):
     results_dict["2w"] = np.array([0, 0, 0, 0, 0], dtype=np.float32)
     results_dict["1m"] = np.array([0, 0, 0, 0, 0], dtype=np.float32)
 
+    per_user_results = {"user": [], "1w": {}, "2w": {}, "1m": {}}
+    for k in [1, 5, 10, 20]:
+        per_user_results["1w"][k] = []
+        per_user_results["2w"][k] = []
+        per_user_results["1m"][k] = []
     # change to validation mode
     model.eval()
     with torch.no_grad():
@@ -785,6 +767,8 @@ def evalNet(config, model, data_loader, device):
         for inputs in data_loader:
             x, x_dict, y1w_dict, y2w_dict, y1m_dict = send_to_device_eval(inputs, device, config)
 
+            users = x_dict["user"]
+            per_user_results["user"].extend(users.cpu().numpy())
             # print(x_dict)
             prediction = model(x, x_dict, device)   
             ydicts = {
@@ -800,13 +784,19 @@ def evalNet(config, model, data_loader, device):
                 if config.predict_clusters:
                     if config.predict_intra_cluster:
                         logits_cluster, logits_icid = prediction
-                        results_dict[lookahead] += calculate_correct_predictions_from_set_tiered(logits_cluster, y_cluster, logits_icid, y_icid)
+                        batch_results, batch_per_user_results = calculate_correct_predictions_from_set_tiered(logits_cluster, y_cluster, logits_icid, y_icid)
                     else:
                         logits_cluster = prediction
-                        results_dict[lookahead] += calculate_correct_predictions_from_set(logits_cluster, y_cluster)
+                        batch_results, batch_per_user_results = calculate_correct_predictions_from_set(logits_cluster, y_cluster)
+                        # results_dict[lookahead] += calculate_correct_predictions_from_set(logits_cluster, y_cluster)
                 else:
                     logits_loc = prediction
-                    results_dict[lookahead] += calculate_correct_predictions_from_set(logits_loc, y)
+                    # results_dict[lookahead] += calculate_correct_predictions_from_set(logits_loc, y)
+                    batch_results, batch_per_user_results = calculate_correct_predictions_from_set(logits_loc, y)
+
+                results_dict[lookahead] += batch_results
+                for k in [1, 5, 10, 20]:
+                    per_user_results[lookahead][k].extend(batch_per_user_results[k])
 
     results_df = pd.DataFrame()
     for lookahead in ["1w", "2w", "1m"]:
@@ -819,9 +809,16 @@ def evalNet(config, model, data_loader, device):
         row_df = pd.DataFrame([row])
         results_df = pd.concat([results_df, row_df], ignore_index=True)
 
+    # convert per user results to dataframe, with user, lookahead_k columns
+    per_user_results_df = pd.DataFrame(per_user_results["user"], columns=["user"])
+    for lookahead in ["1w", "2w", "1m"]:
+        for k in [1, 5, 10, 20]:
+            per_user_results_df[f"{lookahead}_{k}"] = per_user_results[lookahead][k]
+    # per_user_results_df.to_csv("per_user_results.csv", index=False)
+
 
     if config.verbose:
         print("Eval results:")
         print(results_df)
 
-    return results_df
+    return results_df, per_user_results_df
